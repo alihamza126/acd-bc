@@ -18,7 +18,11 @@ import { generateVerificationToken, generateTokenHash } from './helpers/token.he
 import { generateOtp, hashOtp, getOtpExpirySeconds } from './helpers/otp.helper';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { verifySync, TOTP, generateURI } from 'otplib';
+import { generateSecret, generateURI, verifySync } from 'otplib';
+import { NodeCryptoPlugin } from '@otplib/plugin-crypto-node';
+
+/** Node crypto plugin for sync TOTP operations (required in Node for verifySync). */
+const nodeCryptoPlugin = new NodeCryptoPlugin();
 
 @Injectable()
 export class UsersService {
@@ -342,6 +346,7 @@ export class UsersService {
       const result = verifySync({
         secret: user.security.twoFactorSecret,
         token: twoFactorCode,
+        crypto: nodeCryptoPlugin,
       });
       if (!result.valid) {
         throw new UnauthorizedException('Invalid two-factor code');
@@ -645,12 +650,11 @@ export class UsersService {
       }
 
       const serviceName = 'Account Deal App';
-      const totp = new TOTP();
-      const secret = totp.generateSecret();
+      const secret = generateSecret({ crypto: nodeCryptoPlugin });
       const otpAuthUrl = generateURI({
-        secret,
-        label: user.email,
         issuer: serviceName,
+        label: user.email,
+        secret,
       });
 
       await this.prisma.userSecurity.update({
@@ -695,6 +699,7 @@ export class UsersService {
       const result = verifySync({
         secret: user.security.twoFactorSecret,
         token: twoFactorCode,
+        crypto: nodeCryptoPlugin,
       });
 
       if (!result.valid) {

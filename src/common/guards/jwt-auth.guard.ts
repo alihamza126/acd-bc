@@ -1,21 +1,15 @@
-import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { Observable } from 'rxjs';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  canActivate(context: ExecutionContext): boolean | Promise<boolean> | Observable<boolean> {
-    const request = context.switchToHttp().getRequest();
-    
-    if (request.basicAuthValid) {
-      return true;
-    }
-    
-    return super.canActivate(context);
-  }
+  private readonly logger = new Logger(JwtAuthGuard.name);
 
   handleRequest(err: any, user: any, info: any) {
     if (err || !user) {
+      this.logger.warn(
+        `JWT auth failed: err=${err?.message ?? 'none'}, user=${!!user}, info=${info?.message ?? JSON.stringify(info)}`,
+      );
       throw err || new UnauthorizedException('Invalid or expired token');
     }
     return user;

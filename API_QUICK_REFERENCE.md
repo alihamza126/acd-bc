@@ -66,6 +66,128 @@ curl http://localhost:3000/api
 
 ---
 
+## Testing Update Username & 2FA (Protected APIs)
+
+These endpoints require a **JWT** (user identity). You can send it in either:
+
+- **`Authorization: Bearer YOUR_JWT`** (when not using Basic Auth), or  
+- **`X-Access-Token: YOUR_JWT`** (when also sending Basic Auth in `Authorization`).
+
+**When using both Basic Auth and JWT:** send Basic in `Authorization` and JWT in `X-Access-Token`. **Do not put quotes around the token** in the header (use `X-Access-Token: eyJ...` not `X-Access-Token: "eyJ..."`).
+
+```bash
+curl -X PUT http://localhost:3000/api/users/profile/username \
+  -u "$BASIC_AUTH_USERNAME:$BASIC_AUTH_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -H "X-Access-Token: YOUR_JWT" \
+  -d '{"username": "newusername"}'
+```
+
+**Step 0 – Get an access token**  
+Register, verify email (or use the link from email), then login and verify OTP. Use the `accessToken` from the response as `YOUR_JWT` below.
+
+**Quick test (Basic Auth + JWT):** If Basic Auth is enabled, use both. Replace the token with a fresh one from login if you get `401 Invalid or expired token` (expired or wrong `JWT_SECRET`).
+
+```bash
+# Export from .env: source .env  (or set BASIC_AUTH_USERNAME, BASIC_AUTH_PASSWORD)
+curl -X PUT http://localhost:3000/api/users/profile/username \
+  -u "$BASIC_AUTH_USERNAME:$BASIC_AUTH_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -H "X-Access-Token: YOUR_ACCESS_TOKEN" \
+  -d '{"username": "testuser3updated"}'
+```
+
+---
+
+### Update username
+
+- **Endpoint:** `PUT /api/users/profile/username`
+- **Body:** `{ "username": "newusername" }` (3–50 chars, letters/numbers/underscores only; can change once per month)
+
+```bash
+# With Bearer only (no Basic Auth):
+curl -X PUT http://localhost:3000/api/users/profile/username \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -d '{"username": "newusername"}'
+
+# With both Basic Auth + JWT:
+curl -X PUT http://localhost:3000/api/users/profile/username \
+  -u "$BASIC_AUTH_USERNAME:$BASIC_AUTH_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -H "X-Access-Token: YOUR_JWT" \
+  -d '{"username": "newusername"}'
+```
+
+**Success (200):**
+```json
+{
+  "message": "Username updated successfully",
+  "username": "newusername"
+}
+```
+
+---
+
+### Enable 2FA (two steps)
+
+**Step 1 – Get 2FA secret and QR code**
+
+```bash
+# Bearer only:
+curl -s -X GET http://localhost:3000/api/users/profile/2fa/secret \
+  -H "Authorization: Bearer YOUR_JWT"
+
+# Basic Auth + JWT:
+curl -s -X GET http://localhost:3000/api/users/profile/2fa/secret \
+  -u "$BASIC_AUTH_USERNAME:$BASIC_AUTH_PASSWORD" \
+  -H "X-Access-Token: YOUR_JWT"
+```
+
+**Response (200):**
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",
+  "otpAuthUrl": "otpauth://totp/...",
+  "qrCodeUrl": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=..."
+}
+```
+
+- Open `qrCodeUrl` in a browser to show the QR code, or add the `secret` manually in Google Authenticator / Authy / etc.
+- Get the current **6-digit code** from the app.
+
+**Step 2 – Enable 2FA with that code**
+
+```bash
+# Replace 123456 with the 6-digit code from your authenticator app
+# Bearer only:
+curl -X POST http://localhost:3000/api/users/profile/2fa/enable \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -d '{"twoFactorCode": "123456"}'
+
+# Basic Auth + JWT:
+curl -X POST http://localhost:3000/api/users/profile/2fa/enable \
+  -u "$BASIC_AUTH_USERNAME:$BASIC_AUTH_PASSWORD" \
+  -H "Content-Type: application/json" \
+  -H "X-Access-Token: YOUR_JWT" \
+  -d '{"twoFactorCode": "123456"}'
+```
+
+**Success (200):**
+```json
+{
+  "message": "Two-factor authentication enabled successfully"
+}
+```
+
+**Common errors:**
+- `400` – "2FA secret not found" → Call `GET .../2fa/secret` first.
+- `400` – "2FA is already enabled" → 2FA is already on for this user.
+- `401` – "Invalid two-factor code" → Use the current 6-digit code from the app (it changes every 30 seconds).
+
+---
+
 ## Response Examples
 
 ### Register Response (201)
