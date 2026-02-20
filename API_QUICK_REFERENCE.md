@@ -77,6 +77,26 @@ curl http://localhost:3000/api
 ```
 
 ### Login Response (200)
+First step returns OTP session:
+```json
+{
+  "message": "OTP sent to your email. Please verify to continue.",
+  "loginSessionId": "uuid",
+  "expiresIn": 300
+}
+```
+After verify-otp (and verify-2fa if enabled), same shape as below (accessToken + user).
+
+**If email is not verified:** Login returns `400` and sends a new verification email:
+```json
+{
+  "statusCode": 400,
+  "message": "Email not verified. A new verification link has been sent to your email."
+}
+```
+
+### Verify Email Response (200)
+Returns access token and user (user is logged in after verifying):
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -84,16 +104,9 @@ curl http://localhost:3000/api
     "id": "uuid",
     "email": "test@example.com",
     "username": "testuser",
-    "emailVerified": false,
-    "status": "unverified"
+    "emailVerified": true,
+    "status": "active"
   }
-}
-```
-
-### Verify Email Response (200)
-```json
-{
-  "message": "Email verified successfully"
 }
 ```
 

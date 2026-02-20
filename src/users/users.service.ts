@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../common/database/prisma.service';
+import { AuthTokenStoreService } from '../common/services/auth-token-store.service';
 import { EmailService } from '../common/services/email.service';
 import { StorageService } from '../common/services/storage.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,6 +26,7 @@ export class UsersService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly authTokenStore: AuthTokenStoreService,
     private readonly emailService: EmailService,
     private readonly storageService: StorageService,
     private readonly jwtService: JwtService,
@@ -77,6 +79,7 @@ export class UsersService {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
+      await this.authTokenStore.setEmailVerificationToken(tokenHash, user.id);
 
       await this.prisma.userDevice.create({
         data: {
@@ -180,6 +183,29 @@ export class UsersService {
         });
       }
 
+      if (!user.emailVerified) {
+        const verificationToken = generateVerificationToken();
+        const tokenHash = generateTokenHash(verificationToken);
+        await this.prisma.authToken.create({
+          data: {
+            userId: user.id,
+            type: 'email_verification',
+            tokenHash,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        });
+        await this.authTokenStore.setEmailVerificationToken(tokenHash, user.id);
+        await this.emailService.sendVerificationEmail(
+          user.email,
+          verificationToken,
+          user.username,
+        );
+        this.logger.log(`Resent verification email for unverified login: ${user.id}`);
+        throw new BadRequestException(
+          'Email not verified. A new verification link has been sent to your email.',
+        );
+      }
+
       const otp = generateOtp();
       const otpHash = hashOtp(otp);
       const expiresAt = new Date(Date.now() + getOtpExpirySeconds() * 1000);
@@ -191,6 +217,10 @@ export class UsersService {
           tokenHash: otpHash,
           expiresAt,
         },
+      });
+      await this.authTokenStore.setLoginOtp(authToken.id, {
+        userId: user.id,
+        tokenHash: otpHash,
       });
 
       await this.emailService.sendLoginOtpEmail(
@@ -208,7 +238,10 @@ export class UsersService {
         expiresIn: getOtpExpirySeconds(),
       };
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       this.logger.error('Login failed', error);
@@ -223,32 +256,33 @@ export class UsersService {
     userAgent?: string,
   ) {
     try {
-      const authToken = await this.prisma.authToken.findUnique({
-        where: { id: loginSessionId },
-        include: { user: { include: { security: true } } },
-      });
-
-      if (!authToken || authToken.type !== 'login_otp' || authToken.used) {
-        throw new BadRequestException('Invalid or expired login session');
+      let payload = await this.authTokenStore.getLoginOtp(loginSessionId);
+      if (!payload) {
+        const fromDb = await this.authTokenStore.getLoginOtpFromDb(loginSessionId);
+        if (fromDb) payload = { userId: fromDb.userId, tokenHash: fromDb.tokenHash };
       }
-      if (authToken.expiresAt < new Date()) {
-        throw new BadRequestException('OTP has expired. Please request a new one.');
+      if (!payload) {
+        throw new BadRequestException('Invalid or expired login session');
       }
 
       const otpHash = hashOtp(otp);
-      if (authToken.tokenHash !== otpHash) {
+      if (payload.tokenHash !== otpHash) {
         throw new UnauthorizedException('Invalid OTP');
       }
 
-      await this.prisma.authToken.update({
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { security: true },
+      });
+      if (!user || user.deletedAt) {
+        throw new UnauthorizedException('Account has been deleted');
+      }
+
+      await this.prisma.authToken.updateMany({
         where: { id: loginSessionId },
         data: { used: true, usedAt: new Date() },
       });
-
-      const user = authToken.user;
-      if (user.deletedAt) {
-        throw new UnauthorizedException('Account has been deleted');
-      }
+      await this.authTokenStore.deleteLoginOtp(loginSessionId);
 
       if (user.security?.twoFactorEnabled && user.security.twoFactorSecret) {
         const twoFaToken = await this.prisma.authToken.create({
@@ -259,6 +293,7 @@ export class UsersService {
             expiresAt: new Date(Date.now() + 5 * 60 * 1000),
           },
         });
+        await this.authTokenStore.setLogin2FaPending(twoFaToken.id, user.id);
         this.logger.log(`2FA required for user: ${user.id}`);
         return {
           requiresTwoFactor: true,
@@ -287,20 +322,20 @@ export class UsersService {
     userAgent?: string,
   ) {
     try {
-      const authToken = await this.prisma.authToken.findUnique({
-        where: { id: loginSessionId },
-        include: { user: { include: { security: true } } },
-      });
-
-      if (!authToken || authToken.type !== 'login_2fa_pending' || authToken.used) {
+      let payload = await this.authTokenStore.getLogin2FaPending(loginSessionId);
+      if (!payload) {
+        const fromDb = await this.authTokenStore.getLogin2FaFromDb(loginSessionId);
+        if (fromDb) payload = { userId: fromDb.userId };
+      }
+      if (!payload) {
         throw new BadRequestException('Invalid or expired login session');
       }
-      if (authToken.expiresAt < new Date()) {
-        throw new BadRequestException('Session expired. Please login again.');
-      }
 
-      const user = authToken.user;
-      if (!user.security?.twoFactorEnabled || !user.security.twoFactorSecret) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { security: true },
+      });
+      if (!user?.security?.twoFactorEnabled || !user.security.twoFactorSecret) {
         throw new BadRequestException('2FA is not enabled for this account');
       }
 
@@ -312,10 +347,11 @@ export class UsersService {
         throw new UnauthorizedException('Invalid two-factor code');
       }
 
-      await this.prisma.authToken.update({
+      await this.prisma.authToken.updateMany({
         where: { id: loginSessionId },
         data: { used: true, usedAt: new Date() },
       });
+      await this.authTokenStore.deleteLogin2FaPending(loginSessionId);
 
       return this.completeLogin(user.id, ipAddress, userAgent);
     } catch (error) {
@@ -435,54 +471,54 @@ export class UsersService {
     return 'desktop';
   }
 
-  async verifyEmail(token: string) {
+  async verifyEmail(
+    token: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     try {
       const tokenHash = generateTokenHash(token);
 
-      const authToken = await this.prisma.authToken.findFirst({
-        where: {
-          tokenHash,
-          type: 'email_verification',
-          used: false,
-          expiresAt: {
-            gte: new Date(),
-          },
-        },
-        include: {
-          user: true,
-        },
-      });
+      let userId: string | null =
+        (await this.authTokenStore.getEmailVerificationToken(tokenHash))?.userId ??
+        null;
+      if (!userId) {
+        const fromDb = await this.authTokenStore.getEmailVerificationFromDb(tokenHash);
+        if (fromDb) userId = fromDb.userId;
+      }
 
-      if (!authToken) {
+      if (!userId) {
         throw new BadRequestException('Invalid or expired verification token');
       }
 
-      if (authToken.user.emailVerified) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!user) {
+        throw new BadRequestException('Invalid or expired verification token');
+      }
+      if (user.emailVerified) {
         throw new BadRequestException('Email already verified');
       }
 
       await this.prisma.$transaction([
         this.prisma.user.update({
-          where: { id: authToken.userId },
+          where: { id: userId },
           data: {
             emailVerified: true,
             status: 'active',
           },
         }),
-        this.prisma.authToken.update({
-          where: { id: authToken.id },
-          data: {
-            used: true,
-            usedAt: new Date(),
-          },
+        this.prisma.authToken.updateMany({
+          where: { tokenHash, type: 'email_verification' },
+          data: { used: true, usedAt: new Date() },
         }),
       ]);
+      await this.authTokenStore.deleteEmailVerificationToken(tokenHash);
 
-      this.logger.log(`Email verified for user: ${authToken.userId}`);
+      this.logger.log(`Email verified for user: ${userId}`);
 
-      return {
-        message: 'Email verified successfully',
-      };
+      return this.completeLogin(userId, ipAddress, userAgent);
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;

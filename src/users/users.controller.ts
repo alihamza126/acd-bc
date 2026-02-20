@@ -70,10 +70,12 @@ export class UsersController {
 
   @Get('verify-email')
   @HttpCode(HttpStatus.OK)
-  async verifyEmail(@Query('token') token: string) {
+  async verifyEmail(@Query('token') token: string, @Req() req: Request) {
     if (!token) {
       throw new BadRequestException('Verification token is required');
     }
-    return this.usersService.verifyEmail(token);
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    return this.usersService.verifyEmail(token, ipAddress, userAgent);
   }
 }
