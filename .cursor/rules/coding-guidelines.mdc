@@ -1,0 +1,329 @@
+---
+alwaysApply: true
+---
+
+# NestJS Coding Guidelines
+
+## Module Structure
+
+### 1. Separate Modules for New Features
+- **Always create a dedicated module** for each new feature/domain (e.g., `users`, `listings`, `deals`, `chat`, `notifications`)
+- Each module should be self-contained with its own:
+  - `*.module.ts` - Module definition
+  - `*.controller.ts` - API endpoints
+  - `*.service.ts` - Business logic
+  - `*.entity.ts` or `*.schema.ts` - Database entities
+  - `*.dto.ts` - Data transfer objects (request/response)
+  - `*.repository.ts` - Database operations (if using custom repositories)
+  - `*.guard.ts` - Route guards (if needed)
+  - `*.interceptor.ts` - Interceptors (if needed)
+  - `*.filter.ts` - Exception filters (if needed)
+
+**Example structure:**
+```
+src/
+  users/
+    users.module.ts
+    users.controller.ts
+    users.service.ts
+    entities/user.entity.ts
+    dto/create-user.dto.ts
+    dto/update-user.dto.ts
+    repositories/users.repository.ts
+    guards/user-owner.guard.ts
+```
+
+### 2. Module Organization Rules
+- **One feature = One module**
+- Modules should be imported in `app.module.ts` or parent feature modules
+- Use `@Module()` decorator with explicit `imports`, `controllers`, `providers`, `exports`
+- Export services that other modules need to use
+- Never put business logic in controllers - controllers only handle HTTP requests/responses
+
+## Helper Functions & Utilities
+
+### 3. Separate Helper Functions
+- Create **dedicated helper/utility modules** for reusable functions
+- Place helpers in `src/common/helpers/` or `src/shared/utils/`
+- Group related helpers in separate files (e.g., `date.helper.ts`, `validation.helper.ts`, `format.helper.ts`)
+- Export helpers as pure functions (no side effects when possible)
+- Use TypeScript types/interfaces for helper parameters and return values
+
+**Example:**
+```
+src/common/helpers/
+  date.helper.ts
+  validation.helper.ts
+  format.helper.ts
+  encryption.helper.ts
+```
+
+**Helper function pattern:**
+```typescript
+// src/common/helpers/date.helper.ts
+export function formatDate(date: Date): string {
+  // implementation
+}
+
+export function addDays(date: Date, days: number): Date {
+  // implementation
+}
+```
+
+### 4. Centralized Functions & Modularity
+- **Create shared/common modules** for cross-cutting concerns:
+  - `src/common/config/` - Configuration
+  - `src/common/constants/` - Constants and enums
+  - `src/common/decorators/` - Custom decorators
+  - `src/common/filters/` - Exception filters
+  - `src/common/guards/` - Auth guards, role guards
+  - `src/common/interceptors/` - Transform interceptors, logging
+  - `src/common/pipes/` - Validation pipes, transform pipes
+  - `src/common/interfaces/` - Shared interfaces
+
+- **Reusable services** should be in `src/common/services/`:
+  - `logger.service.ts` - Centralized logging
+  - `cache.service.ts` - Redis caching
+  - `email.service.ts` - Email sending
+  - `notification.service.ts` - Push notifications
+
+- **Database utilities** in `src/common/database/`:
+  - Base repository classes
+  - Database connection config
+  - Migration utilities
+
+## Code Quality
+
+### 5. Neat Code - No Extra Stuff
+- **Remove unused imports, variables, functions**
+- **No commented-out code** - use git history instead
+- **No console.log** - use proper logger service
+- **No hardcoded values** - use constants or config
+- **Keep functions small and focused** - single responsibility principle
+- **Use meaningful variable/function names** - self-documenting code
+- **Avoid deep nesting** - use early returns, guard clauses
+- **Prefer composition over inheritance**
+
+**Bad:**
+```typescript
+// Don't do this
+async createUser(data: any) {
+  // lots of nested if statements
+  if (data) {
+    if (data.email) {
+      if (isValidEmail(data.email)) {
+        // ...
+      }
+    }
+  }
+}
+```
+
+**Good:**
+```typescript
+// Do this
+async createUser(dto: CreateUserDto) {
+  this.validateUserData(dto);
+  const hashedPassword = await this.hashPassword(dto.password);
+  return this.userRepository.create({ ...dto, password: hashedPassword });
+}
+
+private validateUserData(dto: CreateUserDto): void {
+  if (!dto.email || !this.isValidEmail(dto.email)) {
+    throw new BadRequestException('Invalid email');
+  }
+}
+```
+
+## Error Handling
+
+### 6. API Error Handling - Handle All Cases
+- **Always use try-catch blocks** in service methods that can fail
+- **Throw appropriate NestJS exceptions**:
+  - `BadRequestException` - 400 - Invalid input
+  - `UnauthorizedException` - 401 - Not authenticated
+  - `ForbiddenException` - 403 - Not authorized
+  - `NotFoundException` - 404 - Resource not found
+  - `ConflictException` - 409 - Resource conflict
+  - `UnprocessableEntityException` - 422 - Validation failed
+  - `InternalServerErrorException` - 500 - Server error
+
+- **Create custom exception filters** for consistent error responses:
+```typescript
+// src/common/filters/http-exception.filter.ts
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    // Format error response consistently
+  }
+}
+```
+
+- **Validate all inputs** using DTOs with class-validator:
+```typescript
+// dto/create-user.dto.ts
+export class CreateUserDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+```
+
+- **Handle database errors** (unique constraints, foreign keys, etc.)
+- **Handle async operation errors** (database queries, external API calls)
+- **Log errors** using logger service before throwing
+- **Return meaningful error messages** (but don't expose sensitive info in production)
+
+**Error handling pattern:**
+```typescript
+// service example
+async findById(id: string): Promise<User> {
+  try {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    return user;
+  } catch (error) {
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+    this.logger.error(`Error finding user ${id}`, error.stack);
+    throw new InternalServerErrorException('Failed to retrieve user');
+  }
+}
+```
+
+## Additional Best Practices
+
+### 7. DTOs & Validation
+- **Always use DTOs** for request/response data
+- **Validate all inputs** with class-validator decorators
+- **Use class-transformer** for data transformation
+- **Create separate DTOs** for create, update, query operations
+
+### 8. Database Operations
+- **Use transactions** for multi-step operations
+- **Handle database errors** gracefully (duplicate keys, foreign key violations)
+- **Use soft deletes** where appropriate (deleted_at pattern)
+- **Add indexes** for frequently queried fields
+- **Use query builders** for complex queries
+
+### 9. Security
+- **Never expose sensitive data** in responses (passwords, tokens, secrets)
+- **Use environment variables** for configuration
+- **Validate and sanitize** all user inputs
+- **Use parameterized queries** (TypeORM/Prisma handle this)
+- **Implement rate limiting** for API endpoints
+- **Use HTTPS** in production
+
+### 10. Testing
+- **Write unit tests** for services and helpers
+- **Write integration tests** for API endpoints
+- **Mock external dependencies** (database, external APIs)
+- **Test error cases** - not just happy paths
+
+### 11. Documentation
+- **Add JSDoc comments** for public methods
+- **Document API endpoints** with Swagger/OpenAPI decorators
+- **Keep README updated** with setup instructions
+
+## File Naming Conventions
+- **Modules**: `*.module.ts`
+- **Controllers**: `*.controller.ts`
+- **Services**: `*.service.ts`
+- **Entities**: `*.entity.ts` or `entities/*.entity.ts`
+- **DTOs**: `dto/*.dto.ts` (e.g., `create-user.dto.ts`)
+- **Guards**: `*.guard.ts` or `guards/*.guard.ts`
+- **Filters**: `*.filter.ts` or `filters/*.filter.ts`
+- **Helpers**: `*.helper.ts` or `helpers/*.helper.ts`
+- **Interfaces**: `*.interface.ts` or `interfaces/*.interface.ts`
+- **Constants**: `*.constants.ts` or `constants/*.constants.ts`
+
+## Documentation Requirements
+
+### 12. API Documentation Sync Requirement
+**CRITICAL:** When creating or updating API endpoints, you **MUST** update the corresponding documentation files.
+
+**API Quick Reference (Table View) — REQUIRED:**
+- **Every new API** MUST be added to `API_QUICK_REFERENCE.md` in **table view**.
+- Add a row to the endpoint table with: **Method**, **Endpoint**, **Description**, **Auth Required**.
+- Keep the table up-to-date so developers can see all APIs at a glance.
+- Place under the correct section (Public Endpoints or Protected Endpoints).
+
+**Table format in `API_QUICK_REFERENCE.md`:**
+```markdown
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|----------------|
+| `POST` | `/api/auth/register` | Register new user | No |
+| `POST` | `/api/users/profile/avatar` | Upload avatar | JWT |
+```
+
+**When Creating New APIs:**
+1. Add endpoint to **`API_QUICK_REFERENCE.md`** table (Method, Endpoint, Description, Auth Required).
+2. Add full documentation to `docs/API_ENDPOINTS.md`
+3. Create feature-specific docs if needed (e.g., `docs/PROFILE_API.md`)
+4. Include in full docs: request/response examples, authentication, error responses, cURL examples
+
+**When Updating Existing APIs:**
+1. **Update** the row in `API_QUICK_REFERENCE.md` table if endpoint, method, or description changed
+2. **Update** the corresponding section in `docs/API_ENDPOINTS.md`
+3. **Update** feature-specific docs if they exist
+4. Ensure all examples reflect current behavior
+
+**Documentation Files:**
+- **`API_QUICK_REFERENCE.md`** - Table view of all endpoints (MUST add every new API here)
+- `docs/API_ENDPOINTS.md` - Complete API documentation
+- `docs/PROFILE_API.md` - Profile endpoints documentation
+- `docs/LOGIN_FLOW_OTP_2FA.md` - Login flow documentation
+- Feature-specific docs in `docs/` folder
+
+**Workflow:**
+1. Create/update API endpoint
+2. **Add/update row in `API_QUICK_REFERENCE.md` table**
+3. Update other corresponding documentation files
+4. Verify examples work with current implementation
+5. Commit code and docs together
+
+### 13. Database Schema Sync Requirement
+**CRITICAL:** When making changes to `prisma/schema.prisma`, you **MUST** also update `docs/DB_SCHEMA_BASE_DESIGN.dbml` to keep them synchronized.
+
+**Workflow:**
+1. Make changes to `prisma/schema.prisma`
+2. **Immediately update** `docs/DB_SCHEMA_BASE_DESIGN.dbml` with the same changes
+3. Run `npm run prisma:generate` to regenerate Prisma Client
+4. Run `npm run prisma:migrate` to create migration
+5. Verify both files are in sync before committing
+
+**What to sync:**
+- Table definitions (add/remove/modify tables)
+- Field definitions (add/remove/modify fields, types, constraints)
+- Indexes (add/remove indexes)
+- Relationships (add/remove foreign key relationships)
+
+**Reference:** See `docs/SCHEMA_SYNC_GUIDE.md` for detailed instructions.
+
+## Summary Checklist
+When creating new features:
+- [ ] Create separate module
+- [ ] Create DTOs with validation
+- [ ] Implement service with business logic
+- [ ] Add error handling for all cases
+- [ ] Use helper functions from common/helpers
+- [ ] Remove unused code
+- [ ] Add proper logging
+- [ ] Handle edge cases and errors
+- [ ] Export what other modules need
+- [ ] Keep code clean and focused
+- [ ] **Documentation:** Add API to `API_QUICK_REFERENCE.md` table (Method, Endpoint, Description, Auth) and to `docs/API_ENDPOINTS.md`
+- [ ] **If schema changed:** Update `docs/DB_SCHEMA_BASE_DESIGN.dbml` to match
+
+When updating existing features:
+- [ ] Update implementation code
+- [ ] **Documentation:** Update `API_QUICK_REFERENCE.md` table row and `docs/API_ENDPOINTS.md` (and related files)
+- [ ] **If schema changed:** Update `docs/DB_SCHEMA_BASE_DESIGN.dbml` to match
+- [ ] Verify all examples in docs still work

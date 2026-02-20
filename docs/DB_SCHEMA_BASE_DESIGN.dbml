@@ -1,0 +1,470 @@
+// ============================================================
+//  ACCOUNT DEAL APP — OPTIMIZED DATABASE SCHEMA (Diagram Style)
+// ============================================================
+
+
+// ==============================
+// USERS & AUTH
+// ==============================
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  username varchar(50) [unique, not null]
+  email varchar(255) [unique, not null]
+  password_hash varchar
+  status varchar(20) [not null, default: 'unverified']
+  email_verified boolean [not null, default: false]
+  avatar_url varchar
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+  deleted_at timestamp
+
+  indexes {
+    status
+    deleted_at
+  }
+}
+
+Table user_security {
+  user_id uuid [pk]
+  two_factor_enabled boolean [not null, default: false]
+  two_factor_secret varchar
+  two_factor_method varchar
+  failed_attempts int [not null, default: 0]
+  locked_until timestamp
+  last_login_at timestamp
+  last_login_ip varchar
+  last_username_change_at timestamp
+  updated_at timestamp [not null, default: `now()`]
+}
+
+Table auth_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  type varchar(30) [not null]
+  token_hash varchar [not null]
+  expires_at timestamp [not null]
+  used boolean [not null, default: false]
+  used_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    token_hash
+    (user_id, type)
+  }
+}
+
+Table user_devices {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  fingerprint varchar [not null]
+  ip_address varchar(45)
+  user_agent text
+  browser varchar
+  os varchar
+  device_type varchar
+  trusted boolean [not null, default: false]
+  last_seen timestamp [not null, default: `now()`]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    user_id
+    fingerprint
+    (user_id, fingerprint) [unique]
+  }
+}
+
+
+// ==============================
+// RBAC
+// ==============================
+
+Table roles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(50) [unique, not null]
+  description text
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table permissions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(100) [unique, not null]
+  description text
+  group_name varchar(50)
+}
+
+Table role_permissions {
+  role_id uuid [not null]
+  permission_id uuid [not null]
+
+  indexes {
+    (role_id, permission_id) [pk]
+  }
+}
+
+Table user_roles {
+  user_id uuid [not null]
+  role_id uuid [not null]
+  assigned_by uuid
+  assigned_at timestamp [not null, default: `now()`]
+  expires_at timestamp
+
+  indexes {
+    (user_id, role_id) [pk]
+  }
+}
+
+
+// ==============================
+// KYC
+// ==============================
+
+Table user_kyc {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  provider varchar(50) [not null]
+  status varchar(20) [not null]
+  level varchar(20) [not null]
+  country varchar(3)
+  applicant_id varchar
+  rejection_reason text
+  reviewed_at timestamp
+  expires_at timestamp
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+}
+
+Table user_kyc_events {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_kyc_id uuid [not null]
+  actor_id uuid
+  event_type varchar(30) [not null]
+  reason text
+  raw_payload jsonb
+  created_at timestamp [not null, default: `now()`]
+}
+
+
+// ==============================
+// LISTINGS
+// ==============================
+
+Table listings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  seller_id uuid [not null]
+  title varchar(255) [not null]
+  description text
+  platform varchar(30) [not null]
+  category varchar(50)
+  link varchar
+  price decimal(15,2) [not null]
+  status varchar(20) [not null, default: 'draft']
+  subscribers bigint
+  monthly_views bigint
+  monthly_income decimal(15,2)
+  monthly_expense decimal(15,2)
+  monetization_available boolean [default: false]
+  display_link boolean [default: false]
+  allow_comments boolean [default: true]
+  is_featured boolean [default: false]
+  featured_expires_at timestamp
+  view_count int [default: 0]
+  favorite_count int [default: 0]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+  deleted_at timestamp
+}
+
+Table listing_media {
+  id uuid [pk, default: `gen_random_uuid()`]
+  listing_id uuid [not null]
+  file_url varchar [not null]
+  file_type varchar(10)
+  file_size int
+  sort_order int [default: 0]
+  created_at timestamp [default: `now()`]
+}
+
+Table listing_comments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  listing_id uuid [not null]
+  user_id uuid [not null]
+  parent_id uuid
+  message text [not null]
+  is_hidden boolean [default: false]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+  deleted_at timestamp
+}
+
+Table listing_favorites {
+  user_id uuid [not null]
+  listing_id uuid [not null]
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (user_id, listing_id) [pk]
+  }
+}
+
+
+// ==============================
+// DEALS
+// ==============================
+
+Table deals {
+  id uuid [pk, default: `gen_random_uuid()`]
+  listing_id uuid [not null]
+  buyer_id uuid [not null]
+  seller_id uuid [not null]
+  escrow_id uuid
+  chat_room_id uuid [not null]
+  type varchar(10) [not null]
+  status varchar(30) [not null]
+  amount decimal(15,2) [not null]
+  currency varchar(10)
+  buyer_paid boolean [default: false]
+  seller_approved boolean [default: false]
+  seller_confirmed_payment boolean [default: false]
+  escrow_approved boolean [default: false]
+  payment_deadline timestamp
+  rights_transfer_deadline timestamp
+  ownership_transfer_deadline timestamp
+  completed_at timestamp
+  cancelled_at timestamp
+  cancellation_reason text
+  last_socket_updated_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table deal_events {
+  id uuid [pk, default: `gen_random_uuid()`]
+  deal_id uuid [not null]
+  actor_id uuid
+  event_type varchar(50) [not null]
+  from_status varchar(30)
+  to_status varchar(30)
+  metadata jsonb
+  created_at timestamp [default: `now()`]
+}
+
+Table deal_disputes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  deal_id uuid [not null]
+  raised_by uuid [not null]
+  assigned_to uuid
+  reason text [not null]
+  status varchar(20) [not null]
+  resolution text
+  resolved_at timestamp
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+
+// ==============================
+// PAYMENTS
+// ==============================
+
+Table payments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  deal_id uuid [not null]
+  payer_id uuid [not null]
+  payee_id uuid
+  amount decimal(15,8) [not null]
+  fee_amount decimal(15,8) [default: 0]
+  net_amount decimal(15,8) [not null]
+  currency varchar(10) [not null]
+  network varchar(30)
+  payment_method varchar(20)
+  tx_hash varchar
+  block_number bigint
+  confirmations int [default: 0]
+  status varchar(20) [not null]
+  confirmed_at timestamp
+  refunded_at timestamp
+  refund_reason text
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+
+// ==============================
+// CHAT
+// ==============================
+
+Table chat_rooms {
+  id uuid [pk, default: `gen_random_uuid()`]
+  last_message_at timestamp
+  last_message_preview varchar(200)
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table chat_room_participants {
+  id uuid [pk, default: `gen_random_uuid()`]
+  chat_room_id uuid [not null]
+  user_id uuid [not null]
+  role varchar(20)
+  last_delivered_message_id uuid
+  last_read_message_id uuid
+  is_muted boolean [default: false]
+  muted_until timestamp
+  joined_at timestamp [default: `now()`]
+  left_at timestamp
+}
+
+Table chat_messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  chat_room_id uuid [not null]
+  sender_id uuid [not null]
+  type varchar(30)
+  message text
+  reply_to_id uuid
+  is_flagged boolean [default: false]
+  flagged_by uuid
+  deleted_at timestamp
+  deleted_by uuid
+  edited_at timestamp
+  created_at timestamp [default: `now()`]
+}
+
+Table chat_attachments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  message_id uuid [not null]
+  file_url varchar [not null]
+  file_name varchar
+  file_type varchar(20)
+  file_size int
+  thumbnail_url varchar
+  created_at timestamp [default: `now()`]
+}
+
+Table chat_message_reactions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  message_id uuid [not null]
+  user_id uuid [not null]
+  emoji varchar(10)
+  created_at timestamp [default: `now()`]
+}
+
+
+// ==============================
+// PRESENCE
+// ==============================
+
+Table user_presence {
+  user_id uuid [pk]
+  status varchar(10) [not null]
+  last_seen timestamp [not null]
+  socket_id varchar
+  updated_at timestamp [default: `now()`]
+}
+
+
+// ==============================
+// PUSH NOTIFICATIONS
+// ==============================
+
+Table notification_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  device_id uuid
+  token varchar [not null]
+  platform varchar(10) [not null]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null, default: `now()`]
+
+  indexes {
+    user_id
+    (user_id, token) [unique]
+  }
+}
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  chat_room_id uuid
+  type varchar(50) [not null]
+  title varchar(255)
+  body text
+  data jsonb
+  read_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    user_id
+    chat_room_id
+    (user_id, read_at, created_at)
+  }
+}
+
+
+// ==============================
+// RELATIONSHIPS
+// ==============================
+
+Ref: user_security.user_id > users.id
+Ref: auth_tokens.user_id > users.id
+Ref: user_devices.user_id > users.id
+
+Ref: role_permissions.role_id > roles.id
+Ref: role_permissions.permission_id > permissions.id
+
+Ref: user_roles.user_id > users.id
+Ref: user_roles.role_id > roles.id
+Ref: user_roles.assigned_by > users.id
+
+Ref: user_kyc.user_id > users.id
+Ref: user_kyc_events.user_kyc_id > user_kyc.id
+Ref: user_kyc_events.actor_id > users.id
+
+Ref: listings.seller_id > users.id
+Ref: listing_media.listing_id > listings.id
+Ref: listing_comments.listing_id > listings.id
+Ref: listing_comments.user_id > users.id
+Ref: listing_comments.parent_id > listing_comments.id
+Ref: listing_favorites.user_id > users.id
+Ref: listing_favorites.listing_id > listings.id
+
+Ref: deals.listing_id > listings.id
+Ref: deals.buyer_id > users.id
+Ref: deals.seller_id > users.id
+Ref: deals.escrow_id > users.id
+Ref: deals.chat_room_id > chat_rooms.id
+
+Ref: deal_events.deal_id > deals.id
+Ref: deal_events.actor_id > users.id
+
+Ref: deal_disputes.deal_id > deals.id
+Ref: deal_disputes.raised_by > users.id
+Ref: deal_disputes.assigned_to > users.id
+
+Ref: payments.deal_id > deals.id
+Ref: payments.payer_id > users.id
+Ref: payments.payee_id > users.id
+
+Ref: chat_room_participants.chat_room_id > chat_rooms.id
+Ref: chat_room_participants.user_id > users.id
+Ref: chat_room_participants.last_delivered_message_id > chat_messages.id
+Ref: chat_room_participants.last_read_message_id > chat_messages.id
+
+Ref: chat_messages.chat_room_id > chat_rooms.id
+Ref: chat_messages.sender_id > users.id
+Ref: chat_messages.reply_to_id > chat_messages.id
+Ref: chat_messages.flagged_by > users.id
+Ref: chat_messages.deleted_by > users.id
+
+Ref: chat_attachments.message_id > chat_messages.id
+Ref: chat_message_reactions.message_id > chat_messages.id
+Ref: chat_message_reactions.user_id > users.id
+
+Ref: user_presence.user_id > users.id
+
+Ref: notification_tokens.user_id > users.id
+Ref: notification_tokens.device_id > user_devices.id
+Ref: notifications.user_id > users.id
+Ref: notifications.chat_room_id > chat_rooms.id
+
