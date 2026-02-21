@@ -17,6 +17,13 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Verify2faDto } from './dto/verify-2fa.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyForgotPasswordOtpDto } from './dto/verify-forgot-password-otp.dto';
+import { VerifyForgotPassword2faDto } from './dto/verify-forgot-password-2fa.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyChangePasswordOtpDto } from './dto/verify-change-password-otp.dto';
+import { VerifyChangePassword2faDto } from './dto/verify-change-password-2fa.dto';
+import { ConfirmChangePasswordDto } from './dto/confirm-change-password.dto';
 
 @Controller('auth')
 export class UsersController {
@@ -78,5 +85,61 @@ export class UsersController {
     const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'];
     return this.usersService.verifyEmail(token, ipAddress, userAgent);
+  }
+
+  // ---------- Forgot password ----------
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.usersService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('verify-forgot-password-otp')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async verifyForgotPasswordOtp(@Body() dto: VerifyForgotPasswordOtpDto) {
+    const otp = dto.otp ?? dto.twoFactorCode;
+    return this.usersService.verifyForgotPasswordOtp(dto.sessionId, otp!);
+  }
+
+  @Post('verify-forgot-password-2fa')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async verifyForgotPassword2fa(@Body() dto: VerifyForgotPassword2faDto) {
+    return this.usersService.verifyForgotPassword2fa(dto.sessionId, dto.twoFactorCode);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.usersService.resetPassword(
+      resetPasswordDto.sessionId,
+      resetPasswordDto.newPassword,
+    );
+  }
+
+  // ---------- Change password (verify/confirm are public; request is protected) ----------
+  @Post('change-password/verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async verifyChangePasswordOtp(@Body() dto: VerifyChangePasswordOtpDto) {
+    const otp = dto.otp ?? dto.twoFactorCode;
+    return this.usersService.verifyChangePasswordOtp(dto.sessionId, otp!);
+  }
+
+  @Post('change-password/verify-2fa')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async verifyChangePassword2fa(@Body() dto: VerifyChangePassword2faDto) {
+    return this.usersService.verifyChangePassword2fa(dto.sessionId, dto.twoFactorCode);
+  }
+
+  @Post('change-password/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+  async confirmChangePassword(@Body() dto: ConfirmChangePasswordDto) {
+    return this.usersService.confirmChangePassword(dto.sessionId, dto.newPassword);
   }
 }

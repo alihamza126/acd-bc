@@ -18,6 +18,13 @@ http://localhost:3000/api
 | `POST` | `/api/auth/verify-otp` | Verify OTP code | No |
 | `POST` | `/api/auth/verify-2fa` | Verify 2FA code (if enabled) | No |
 | `GET` | `/api/auth/verify-email` | Verify email address | No |
+| `POST` | `/api/auth/forgot-password` | Request password reset (sends OTP) | No |
+| `POST` | `/api/auth/verify-forgot-password-otp` | Verify forgot-password OTP | No |
+| `POST` | `/api/auth/verify-forgot-password-2fa` | Verify 2FA for forgot password (if enabled) | No |
+| `POST` | `/api/auth/reset-password` | Set new password after forgot flow | No |
+| `POST` | `/api/auth/change-password/verify-otp` | Verify change-password OTP | No |
+| `POST` | `/api/auth/change-password/verify-2fa` | Verify 2FA for change password (if enabled) | No |
+| `POST` | `/api/auth/change-password/confirm` | Set new password after change flow | No |
 | `GET` | `/api` | Health check | No |
 
 ### 🔒 Protected Endpoints (JWT Required)
@@ -28,6 +35,7 @@ http://localhost:3000/api
 | `PUT` | `/api/users/profile/username` | Update username (1/month limit) |
 | `GET` | `/api/users/profile/2fa/secret` | Get 2FA secret & QR code |
 | `POST` | `/api/users/profile/2fa/enable` | Enable 2FA |
+| `POST` | `/api/users/profile/change-password/request` | Request change password (sends OTP; requires current password) |
 
 ---
 
@@ -63,6 +71,39 @@ curl "http://localhost:3000/api/auth/verify-email?token=YOUR_TOKEN_HERE"
 ```bash
 curl http://localhost:3000/api
 ```
+
+---
+
+## Forgot password flow (OTP + optional 2FA)
+
+1. **POST /api/auth/forgot-password** – `{ "email": "user@example.com" }`  
+   Sends OTP to email. Response: `{ "message": "...", "sessionId": "uuid", "expiresIn": 300 }`.
+
+2. **POST /api/auth/verify-forgot-password-otp** – `{ "sessionId": "uuid", "otp": "123456" }`  
+   Verifies OTP. If 2FA is enabled: `{ "requiresTwoFactor": true, "sessionId": "new-uuid", "expiresIn": 300 }`.  
+   If not: `{ "sessionId": "uuid", "message": "..." }`.
+
+3. **If 2FA required:** **POST /api/auth/verify-forgot-password-2fa** – `{ "sessionId": "new-uuid", "twoFactorCode": "123456" }`  
+   Response: `{ "sessionId": "uuid", "message": "..." }`.
+
+4. **POST /api/auth/reset-password** – `{ "sessionId": "uuid", "newPassword": "NewPass123" }`  
+   Sets new password (same rules as register).
+
+---
+
+## Change password flow (authenticated; OTP + optional 2FA)
+
+1. **POST /api/users/profile/change-password/request** (JWT required) – `{ "currentPassword": "OldPass123" }`  
+   Sends OTP to email. Response: `{ "message": "...", "sessionId": "uuid", "expiresIn": 300 }`.
+
+2. **POST /api/auth/change-password/verify-otp** – `{ "sessionId": "uuid", "otp": "123456" }`  
+   If 2FA enabled: `{ "requiresTwoFactor": true, "sessionId": "new-uuid", "expiresIn": 300 }`.  
+   If not: `{ "sessionId": "uuid", "message": "..." }`.
+
+3. **If 2FA required:** **POST /api/auth/change-password/verify-2fa** – `{ "sessionId": "new-uuid", "twoFactorCode": "123456" }`.
+
+4. **POST /api/auth/change-password/confirm** – `{ "sessionId": "uuid", "newPassword": "NewPass123" }`  
+   Sets new password.
 
 ---
 

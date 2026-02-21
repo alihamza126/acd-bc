@@ -123,6 +123,104 @@ export class AuthTokenStoreService {
     await this.redis.del(this.key('login_2fa_pending', sessionId));
   }
 
+  // ---------- Forgot password OTP ----------
+  async setForgotPasswordOtp(
+    sessionId: string,
+    payload: LoginOtpPayload,
+  ): Promise<boolean> {
+    const key = this.key('forgot_password_otp', sessionId);
+    return this.redis.set(key, JSON.stringify(payload), LOGIN_OTP_TTL);
+  }
+
+  async getForgotPasswordOtp(sessionId: string): Promise<LoginOtpPayload | null> {
+    const key = this.key('forgot_password_otp', sessionId);
+    const raw = await this.redis.get(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw) as LoginOtpPayload;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async deleteForgotPasswordOtp(sessionId: string): Promise<void> {
+    await this.redis.del(this.key('forgot_password_otp', sessionId));
+  }
+
+  async setForgotPassword2FaPending(sessionId: string, userId: string): Promise<boolean> {
+    const key = this.key('forgot_password_2fa_pending', sessionId);
+    const payload: Login2FaPayload = { userId };
+    return this.redis.set(key, JSON.stringify(payload), LOGIN_2FA_TTL);
+  }
+
+  async getForgotPassword2FaPending(sessionId: string): Promise<Login2FaPayload | null> {
+    const key = this.key('forgot_password_2fa_pending', sessionId);
+    const raw = await this.redis.get(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw) as Login2FaPayload;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async deleteForgotPassword2FaPending(sessionId: string): Promise<void> {
+    await this.redis.del(this.key('forgot_password_2fa_pending', sessionId));
+  }
+
+  // ---------- Change password OTP ----------
+  async setChangePasswordOtp(
+    sessionId: string,
+    payload: LoginOtpPayload,
+  ): Promise<boolean> {
+    const key = this.key('change_password_otp', sessionId);
+    return this.redis.set(key, JSON.stringify(payload), LOGIN_OTP_TTL);
+  }
+
+  async getChangePasswordOtp(sessionId: string): Promise<LoginOtpPayload | null> {
+    const key = this.key('change_password_otp', sessionId);
+    const raw = await this.redis.get(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw) as LoginOtpPayload;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async deleteChangePasswordOtp(sessionId: string): Promise<void> {
+    await this.redis.del(this.key('change_password_otp', sessionId));
+  }
+
+  async setChangePassword2FaPending(sessionId: string, userId: string): Promise<boolean> {
+    const key = this.key('change_password_2fa_pending', sessionId);
+    const payload: Login2FaPayload = { userId };
+    return this.redis.set(key, JSON.stringify(payload), LOGIN_2FA_TTL);
+  }
+
+  async getChangePassword2FaPending(sessionId: string): Promise<Login2FaPayload | null> {
+    const key = this.key('change_password_2fa_pending', sessionId);
+    const raw = await this.redis.get(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw) as Login2FaPayload;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async deleteChangePassword2FaPending(sessionId: string): Promise<void> {
+    await this.redis.del(this.key('change_password_2fa_pending', sessionId));
+  }
+
   // ---------- DB fallback (for use by callers when Redis returns null) ----------
   /** Check DB for email verification token (fallback when Redis misses). */
   async getEmailVerificationFromDb(tokenHash: string): Promise<{
@@ -203,5 +301,69 @@ export class AuthTokenStoreService {
       return null;
     }
     return { userId: row.userId, expiresAt: row.expiresAt };
+  }
+
+  /** DB fallback: forgot_password_otp by session id. */
+  async getForgotPasswordOtpFromDb(sessionId: string): Promise<LoginOtpPayload | null> {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      row.type !== 'forgot_password_otp' ||
+      row.used ||
+      row.expiresAt < new Date()
+    ) {
+      return null;
+    }
+    return { userId: row.userId, tokenHash: row.tokenHash };
+  }
+
+  /** DB fallback: forgot_password_2fa_pending by session id. */
+  async getForgotPassword2FaFromDb(sessionId: string): Promise<Login2FaPayload | null> {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      row.type !== 'forgot_password_2fa_pending' ||
+      row.used ||
+      row.expiresAt < new Date()
+    ) {
+      return null;
+    }
+    return { userId: row.userId };
+  }
+
+  /** DB fallback: change_password_otp by session id. */
+  async getChangePasswordOtpFromDb(sessionId: string): Promise<LoginOtpPayload | null> {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      row.type !== 'change_password_otp' ||
+      row.used ||
+      row.expiresAt < new Date()
+    ) {
+      return null;
+    }
+    return { userId: row.userId, tokenHash: row.tokenHash };
+  }
+
+  /** DB fallback: change_password_2fa_pending by session id. */
+  async getChangePassword2FaFromDb(sessionId: string): Promise<Login2FaPayload | null> {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      row.type !== 'change_password_2fa_pending' ||
+      row.used ||
+      row.expiresAt < new Date()
+    ) {
+      return null;
+    }
+    return { userId: row.userId };
   }
 }

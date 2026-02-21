@@ -747,4 +747,290 @@ export class UsersService {
       throw new BadRequestException('Failed to enable 2FA');
     }
   }
+
+  // ---------- Forgot password ----------
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { security: true },
+    });
+    if (!user || user.deletedAt) {
+      return {
+        message:
+          'If an account exists with this email, you will receive a password reset code.',
+      };
+    }
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+    const expiresAt = new Date(Date.now() + getOtpExpirySeconds() * 1000);
+    const authToken = await this.prisma.authToken.create({
+      data: {
+        userId: user.id,
+        type: 'forgot_password_otp',
+        tokenHash: otpHash,
+        expiresAt,
+      },
+    });
+    await this.authTokenStore.setForgotPasswordOtp(authToken.id, {
+      userId: user.id,
+      tokenHash: otpHash,
+    });
+    await this.emailService.sendForgotPasswordOtpEmail(
+      user.email,
+      user.username,
+      otp,
+      Math.floor(getOtpExpirySeconds() / 60),
+    );
+    this.logger.log(`Forgot password OTP sent to ${user.email}`);
+    return {
+      message: 'If an account exists with this email, you will receive a password reset code.',
+      sessionId: authToken.id,
+      expiresIn: getOtpExpirySeconds(),
+    };
+  }
+
+  async verifyForgotPasswordOtp(sessionId: string, otp: string) {
+    let payload = await this.authTokenStore.getForgotPasswordOtp(sessionId);
+    if (!payload) {
+      const fromDb = await this.authTokenStore.getForgotPasswordOtpFromDb(sessionId);
+      if (fromDb) payload = { userId: fromDb.userId, tokenHash: fromDb.tokenHash };
+    }
+    if (!payload) {
+      throw new BadRequestException('Invalid or expired session. Request a new code.');
+    }
+    const otpHash = hashOtp(otp);
+    if (payload.tokenHash !== otpHash) {
+      throw new UnauthorizedException('Invalid code');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: { security: true },
+    });
+    if (!user || user.deletedAt) {
+      throw new BadRequestException('Invalid or expired session.');
+    }
+    await this.prisma.authToken.updateMany({
+      where: { id: sessionId },
+      data: { used: true, usedAt: new Date() },
+    });
+    await this.authTokenStore.deleteForgotPasswordOtp(sessionId);
+    if (user.security?.twoFactorEnabled && user.security.twoFactorSecret) {
+      const twoFaToken = await this.prisma.authToken.create({
+        data: {
+          userId: user.id,
+          type: 'forgot_password_2fa_pending',
+          tokenHash: crypto.randomBytes(32).toString('hex'),
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
+      await this.authTokenStore.setForgotPassword2FaPending(twoFaToken.id, user.id);
+      return {
+        requiresTwoFactor: true,
+        sessionId: twoFaToken.id,
+        expiresIn: 300,
+      };
+    }
+    return { sessionId, message: 'Code verified. You can now reset your password.' };
+  }
+
+  async verifyForgotPassword2fa(sessionId: string, twoFactorCode: string) {
+    let payload = await this.authTokenStore.getForgotPassword2FaPending(sessionId);
+    if (!payload) {
+      const fromDb = await this.authTokenStore.getForgotPassword2FaFromDb(sessionId);
+      if (fromDb) payload = { userId: fromDb.userId };
+    }
+    if (!payload) {
+      throw new BadRequestException('Invalid or expired session. Request a new code.');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: { security: true },
+    });
+    if (!user?.security?.twoFactorEnabled || !user.security.twoFactorSecret) {
+      throw new BadRequestException('2FA is not enabled for this account.');
+    }
+    const result = verifySync({
+      secret: user.security.twoFactorSecret,
+      token: twoFactorCode,
+      crypto: nodeCryptoPlugin,
+    });
+    if (!result.valid) {
+      throw new UnauthorizedException('Invalid two-factor code');
+    }
+    await this.prisma.authToken.updateMany({
+      where: { id: sessionId },
+      data: { used: true, usedAt: new Date() },
+    });
+    await this.authTokenStore.deleteForgotPassword2FaPending(sessionId);
+    return { sessionId, message: '2FA verified. You can now reset your password.' };
+  }
+
+  async resetPassword(sessionId: string, newPassword: string) {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      !['forgot_password_otp', 'forgot_password_2fa_pending'].includes(row.type) ||
+      !row.used
+    ) {
+      throw new BadRequestException(
+        'Invalid or expired session. Please request a new password reset.',
+      );
+    }
+    const passwordHash = await hashPassword(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.authToken.delete({ where: { id: sessionId } }),
+    ]);
+    await this.authTokenStore.deleteForgotPasswordOtp(sessionId);
+    await this.authTokenStore.deleteForgotPassword2FaPending(sessionId);
+    this.logger.log(`Password reset for user: ${row.userId}`);
+    return { message: 'Password reset successfully.' };
+  }
+
+  // ---------- Change password (authenticated) ----------
+  async requestChangePassword(userId: string, currentPassword: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { security: true },
+    });
+    const valid = await comparePassword(currentPassword, user.passwordHash || '');
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+    const otp = generateOtp();
+    const otpHash = hashOtp(otp);
+    const expiresAt = new Date(Date.now() + getOtpExpirySeconds() * 1000);
+    const authToken = await this.prisma.authToken.create({
+      data: {
+        userId: user.id,
+        type: 'change_password_otp',
+        tokenHash: otpHash,
+        expiresAt,
+      },
+    });
+    await this.authTokenStore.setChangePasswordOtp(authToken.id, {
+      userId: user.id,
+      tokenHash: otpHash,
+    });
+    await this.emailService.sendChangePasswordOtpEmail(
+      user.email,
+      user.username,
+      otp,
+      Math.floor(getOtpExpirySeconds() / 60),
+    );
+    this.logger.log(`Change password OTP sent to user: ${user.id}`);
+    return {
+      message: 'A verification code has been sent to your email.',
+      sessionId: authToken.id,
+      expiresIn: getOtpExpirySeconds(),
+    };
+  }
+
+  async verifyChangePasswordOtp(sessionId: string, otp: string) {
+    let payload = await this.authTokenStore.getChangePasswordOtp(sessionId);
+    if (!payload) {
+      const fromDb = await this.authTokenStore.getChangePasswordOtpFromDb(sessionId);
+      if (fromDb) payload = { userId: fromDb.userId, tokenHash: fromDb.tokenHash };
+    }
+    if (!payload) {
+      throw new BadRequestException('Invalid or expired session. Request a new code.');
+    }
+    const otpHash = hashOtp(otp);
+    if (payload.tokenHash !== otpHash) {
+      throw new UnauthorizedException('Invalid code');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: { security: true },
+    });
+    if (!user || user.deletedAt) {
+      throw new BadRequestException('Invalid or expired session.');
+    }
+    await this.prisma.authToken.updateMany({
+      where: { id: sessionId },
+      data: { used: true, usedAt: new Date() },
+    });
+    await this.authTokenStore.deleteChangePasswordOtp(sessionId);
+    if (user.security?.twoFactorEnabled && user.security.twoFactorSecret) {
+      const twoFaToken = await this.prisma.authToken.create({
+        data: {
+          userId: user.id,
+          type: 'change_password_2fa_pending',
+          tokenHash: crypto.randomBytes(32).toString('hex'),
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
+      await this.authTokenStore.setChangePassword2FaPending(twoFaToken.id, user.id);
+      return {
+        requiresTwoFactor: true,
+        sessionId: twoFaToken.id,
+        expiresIn: 300,
+      };
+    }
+    return { sessionId, message: 'Code verified. You can now set your new password.' };
+  }
+
+  async verifyChangePassword2fa(sessionId: string, twoFactorCode: string) {
+    let payload = await this.authTokenStore.getChangePassword2FaPending(sessionId);
+    if (!payload) {
+      const fromDb = await this.authTokenStore.getChangePassword2FaFromDb(sessionId);
+      if (fromDb) payload = { userId: fromDb.userId };
+    }
+    if (!payload) {
+      throw new BadRequestException('Invalid or expired session. Request a new code.');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+      include: { security: true },
+    });
+    if (!user?.security?.twoFactorEnabled || !user.security.twoFactorSecret) {
+      throw new BadRequestException('2FA is not enabled for this account.');
+    }
+    const result = verifySync({
+      secret: user.security.twoFactorSecret,
+      token: twoFactorCode,
+      crypto: nodeCryptoPlugin,
+    });
+    if (!result.valid) {
+      throw new UnauthorizedException('Invalid two-factor code');
+    }
+    await this.prisma.authToken.updateMany({
+      where: { id: sessionId },
+      data: { used: true, usedAt: new Date() },
+    });
+    await this.authTokenStore.deleteChangePassword2FaPending(sessionId);
+    return { sessionId, message: '2FA verified. You can now set your new password.' };
+  }
+
+  async confirmChangePassword(sessionId: string, newPassword: string) {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (
+      !row ||
+      !['change_password_otp', 'change_password_2fa_pending'].includes(row.type) ||
+      !row.used
+    ) {
+      throw new BadRequestException(
+        'Invalid or expired session. Please request a new change password code.',
+      );
+    }
+    const passwordHash = await hashPassword(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: row.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.authToken.delete({ where: { id: sessionId } }),
+    ]);
+    await this.authTokenStore.deleteChangePasswordOtp(sessionId);
+    await this.authTokenStore.deleteChangePassword2FaPending(sessionId);
+    this.logger.log(`Password changed for user: ${row.userId}`);
+    return { message: 'Password changed successfully.' };
+  }
 }

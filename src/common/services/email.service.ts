@@ -237,6 +237,78 @@ export class EmailService {
     });
   }
 
+  async sendForgotPasswordOtpEmail(
+    email: string,
+    username: string,
+    otp: string,
+    expiresInMinutes: number = 5,
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #ff9800;">Password Reset Code</h2>
+            <p>Hi ${username},</p>
+            <p>Use the following one-time code to reset your password:</p>
+            <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; border: 2px dashed #ff9800;">
+              <span style="font-size: 28px; font-weight: bold; letter-spacing: 8px; color: #e65100;">${otp}</span>
+            </div>
+            <p>This code will expire in <strong>${expiresInMinutes} minutes</strong>.</p>
+            <p>If you didn't request a password reset, please ignore this email and secure your account.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #999;">© ${new Date().getFullYear()} Account Deal App. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    `;
+    return this.sendEmail({
+      to: email,
+      subject: 'Your Password Reset Code',
+      html,
+    });
+  }
+
+  async sendChangePasswordOtpEmail(
+    email: string,
+    username: string,
+    otp: string,
+    expiresInMinutes: number = 5,
+  ): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #9c27b0;">Change Password Code</h2>
+            <p>Hi ${username},</p>
+            <p>Use the following one-time code to confirm your password change:</p>
+            <div style="background-color: #f3e5f5; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; border: 2px dashed #9c27b0;">
+              <span style="font-size: 28px; font-weight: bold; letter-spacing: 8px; color: #7b1fa2;">${otp}</span>
+            </div>
+            <p>This code will expire in <strong>${expiresInMinutes} minutes</strong>.</p>
+            <p>If you didn't request a password change, please secure your account immediately.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="font-size: 12px; color: #999;">© ${new Date().getFullYear()} Account Deal App. All rights reserved.</p>
+          </div>
+        </body>
+      </html>
+    `;
+    return this.sendEmail({
+      to: email,
+      subject: 'Your Change Password Code',
+      html,
+    });
+  }
+
   private stripHtml(html: string): string {
     return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
   }
