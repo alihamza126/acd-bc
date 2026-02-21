@@ -165,6 +165,27 @@ export class AuthTokenStoreService {
     };
   }
 
+  /**
+   * Returns why an OTP session is invalid (for clearer error messages).
+   * Use after getLoginOtp + getLoginOtpFromDb both return null.
+   */
+  async getLoginOtpInvalidReason(sessionId: string): Promise<
+    | 'not_found'
+    | 'wrong_type_use_verify_2fa'
+    | 'expired'
+    | 'already_used'
+  > {
+    const row = await this.prisma.authToken.findUnique({
+      where: { id: sessionId },
+    });
+    if (!row) return 'not_found';
+    if (row.type === 'login_2fa_pending') return 'wrong_type_use_verify_2fa';
+    if (row.type !== 'login_otp') return 'not_found';
+    if (row.used) return 'already_used';
+    if (row.expiresAt < new Date()) return 'expired';
+    return 'not_found';
+  }
+
   /** Check DB for login 2FA pending by session id (fallback). */
   async getLogin2FaFromDb(sessionId: string): Promise<{
     userId: string;

@@ -266,7 +266,25 @@ export class UsersService {
         if (fromDb) payload = { userId: fromDb.userId, tokenHash: fromDb.tokenHash };
       }
       if (!payload) {
-        throw new BadRequestException('Invalid or expired login session');
+        const reason = await this.authTokenStore.getLoginOtpInvalidReason(loginSessionId);
+        if (reason === 'wrong_type_use_verify_2fa') {
+          throw new BadRequestException(
+            'This session is for 2FA. Use POST /api/auth/verify-2fa with this loginSessionId and your authenticator code.',
+          );
+        }
+        if (reason === 'already_used') {
+          throw new BadRequestException(
+            'This login session was already used. If you need to complete 2FA, use POST /api/auth/verify-2fa with the loginSessionId from the OTP response.',
+          );
+        }
+        if (reason === 'expired') {
+          throw new BadRequestException(
+            'Login session expired. Request a new OTP by calling POST /api/auth/login again.',
+          );
+        }
+        throw new BadRequestException(
+          'Invalid or expired login session. Use the loginSessionId from the login response (POST /api/auth/login).',
+        );
       }
 
       const otpHash = hashOtp(otp);

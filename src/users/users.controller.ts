@@ -46,9 +46,10 @@ export class UsersController {
   async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto, @Req() req: Request) {
     const ipAddress = req.ip || req.headers['x-forwarded-for']?.toString() || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'];
+    const otp = verifyOtpDto.otp ?? verifyOtpDto.twoFactorCode;
     return this.usersService.verifyOtp(
       verifyOtpDto.loginSessionId,
-      verifyOtpDto.otp,
+      otp!,
       ipAddress,
       userAgent,
     );
