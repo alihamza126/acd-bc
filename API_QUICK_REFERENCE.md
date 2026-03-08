@@ -37,6 +37,26 @@ http://localhost:3000/api
 | `POST` | `/api/users/profile/2fa/enable` | Enable 2FA |
 | `POST` | `/api/users/profile/change-password/request` | Request change password (sends OTP; requires current password) |
 
+### 🛡️ Admin panel (JWT + permission-based)
+
+All admin routes require a valid JWT and at least one of the permissions listed.
+
+| Method | Endpoint | Required permission(s) |
+|--------|----------|------------------------|
+| `GET` | `/api/admin/roles` | `roles:read` or `roles:write` |
+| `GET` | `/api/admin/roles/:id` | `roles:read` or `roles:write` |
+| `POST` | `/api/admin/roles` | `roles:write` |
+| `PUT` | `/api/admin/roles/:id` | `roles:write` |
+| `DELETE` | `/api/admin/roles/:id` | `roles:write` |
+| `PUT` | `/api/admin/roles/:id/permissions` | `roles:write` |
+| `GET` | `/api/admin/permissions` | `roles:read`, `permissions:read`, or `roles:write` |
+| `GET` | `/api/admin/permissions/groups` | same as above |
+| `GET` | `/api/admin/users/:userId/roles` | `users:read` or `users:assign_role` |
+| `POST` | `/api/admin/users/:userId/roles` | `users:assign_role` |
+| `DELETE` | `/api/admin/users/:userId/roles/:roleId` | `users:assign_role` |
+
+**Roles (after seed):** `super_admin` (all permissions), `admin` (read roles/permissions, assign roles to users), `escrow_agent` (deals/escrow permissions). Assign the `super_admin` role to a user via DB or by having another super_admin call `POST /api/admin/users/:userId/roles` with `roleId` of the super_admin role.
+
 ---
 
 ## Quick Test Commands

@@ -1,9 +1,10 @@
-import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, Length } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class Verify2faDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Login session ID is required' })
-  loginSessionId: string;
+  @IsInt()
+  @Type(() => Number)
+  loginSessionId: number;
 
   @IsString()
   @IsNotEmpty({ message: 'Two-factor code is required' })

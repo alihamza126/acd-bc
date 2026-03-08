@@ -1,9 +1,10 @@
-import { IsNotEmpty, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class VerifyOtpDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Login session ID is required' })
-  loginSessionId: string;
+  @IsInt()
+  @Type(() => Number)
+  loginSessionId: number;
 
   /** Email OTP (6 digits). Either otp or twoFactorCode is accepted. */
   @IsOptional()

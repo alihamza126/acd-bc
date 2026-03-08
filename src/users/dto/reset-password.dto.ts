@@ -1,9 +1,10 @@
-import { IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, MinLength, Matches } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class ResetPasswordDto {
-  @IsString()
-  @IsNotEmpty({ message: 'Session ID is required' })
-  sessionId: string;
+  @IsInt()
+  @Type(() => Number)
+  sessionId: number;
 
   @IsString()
   @IsNotEmpty({ message: 'New password is required' })

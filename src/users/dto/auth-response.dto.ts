@@ -1,7 +1,7 @@
 export class AuthResponseDto {
   accessToken: string;
   user: {
-    id: string;
+    id: number;
     email: string;
     username: string;
     emailVerified: boolean;

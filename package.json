@@ -24,7 +24,11 @@
     "prisma:studio": "prisma studio",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
-    "schema:sync": "node scripts/sync-schema-to-dbml.js"
+    "schema:sync": "node scripts/sync-schema-to-dbml.js",
+    "prisma:seed": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.992.0",
@@ -62,6 +66,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
+    "@flydotio/dockerfile": "^0.7.10",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",

@@ -8,16 +8,16 @@ const LOGIN_OTP_TTL = 5 * 60; // 5 min
 const LOGIN_2FA_TTL = 5 * 60; // 5 min
 
 export interface EmailVerificationPayload {
-  userId: string;
+  userId: number;
 }
 
 export interface LoginOtpPayload {
-  userId: string;
+  userId: number;
   tokenHash: string;
 }
 
 export interface Login2FaPayload {
-  userId: string;
+  userId: number;
 }
 
 @Injectable()
@@ -29,14 +29,14 @@ export class AuthTokenStoreService {
     private readonly prisma: PrismaService,
   ) {}
 
-  private key(type: string, id: string): string {
+  private key(type: string, id: string | number): string {
     return `${KEY_PREFIX}:${type}:${id}`;
   }
 
   // ---------- Email verification ----------
   async setEmailVerificationToken(
     tokenHash: string,
-    userId: string,
+    userId: number,
   ): Promise<boolean> {
     const key = this.key('email_verification', tokenHash);
     const payload: EmailVerificationPayload = { userId };
@@ -73,14 +73,14 @@ export class AuthTokenStoreService {
 
   // ---------- Login OTP ----------
   async setLoginOtp(
-    sessionId: string,
+    sessionId: number,
     payload: LoginOtpPayload,
   ): Promise<boolean> {
     const key = this.key('login_otp', sessionId);
     return this.redis.set(key, JSON.stringify(payload), LOGIN_OTP_TTL);
   }
 
-  async getLoginOtp(sessionId: string): Promise<LoginOtpPayload | null> {
+  async getLoginOtp(sessionId: number): Promise<LoginOtpPayload | null> {
     const key = this.key('login_otp', sessionId);
     const raw = await this.redis.get(key);
     if (raw) {
@@ -93,19 +93,19 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteLoginOtp(sessionId: string): Promise<void> {
+  async deleteLoginOtp(sessionId: number): Promise<void> {
     await this.redis.del(this.key('login_otp', sessionId));
   }
 
   // ---------- Login 2FA pending ----------
-  async setLogin2FaPending(sessionId: string, userId: string): Promise<boolean> {
+  async setLogin2FaPending(sessionId: number, userId: number): Promise<boolean> {
     const key = this.key('login_2fa_pending', sessionId);
     const payload: Login2FaPayload = { userId };
     return this.redis.set(key, JSON.stringify(payload), LOGIN_2FA_TTL);
   }
 
   async getLogin2FaPending(
-    sessionId: string,
+    sessionId: number,
   ): Promise<Login2FaPayload | null> {
     const key = this.key('login_2fa_pending', sessionId);
     const raw = await this.redis.get(key);
@@ -119,20 +119,20 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteLogin2FaPending(sessionId: string): Promise<void> {
+  async deleteLogin2FaPending(sessionId: number): Promise<void> {
     await this.redis.del(this.key('login_2fa_pending', sessionId));
   }
 
   // ---------- Forgot password OTP ----------
   async setForgotPasswordOtp(
-    sessionId: string,
+    sessionId: number,
     payload: LoginOtpPayload,
   ): Promise<boolean> {
     const key = this.key('forgot_password_otp', sessionId);
     return this.redis.set(key, JSON.stringify(payload), LOGIN_OTP_TTL);
   }
 
-  async getForgotPasswordOtp(sessionId: string): Promise<LoginOtpPayload | null> {
+  async getForgotPasswordOtp(sessionId: number): Promise<LoginOtpPayload | null> {
     const key = this.key('forgot_password_otp', sessionId);
     const raw = await this.redis.get(key);
     if (raw) {
@@ -145,17 +145,17 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteForgotPasswordOtp(sessionId: string): Promise<void> {
+  async deleteForgotPasswordOtp(sessionId: number): Promise<void> {
     await this.redis.del(this.key('forgot_password_otp', sessionId));
   }
 
-  async setForgotPassword2FaPending(sessionId: string, userId: string): Promise<boolean> {
+  async setForgotPassword2FaPending(sessionId: number, userId: number): Promise<boolean> {
     const key = this.key('forgot_password_2fa_pending', sessionId);
     const payload: Login2FaPayload = { userId };
     return this.redis.set(key, JSON.stringify(payload), LOGIN_2FA_TTL);
   }
 
-  async getForgotPassword2FaPending(sessionId: string): Promise<Login2FaPayload | null> {
+  async getForgotPassword2FaPending(sessionId: number): Promise<Login2FaPayload | null> {
     const key = this.key('forgot_password_2fa_pending', sessionId);
     const raw = await this.redis.get(key);
     if (raw) {
@@ -168,20 +168,20 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteForgotPassword2FaPending(sessionId: string): Promise<void> {
+  async deleteForgotPassword2FaPending(sessionId: number): Promise<void> {
     await this.redis.del(this.key('forgot_password_2fa_pending', sessionId));
   }
 
   // ---------- Change password OTP ----------
   async setChangePasswordOtp(
-    sessionId: string,
+    sessionId: number,
     payload: LoginOtpPayload,
   ): Promise<boolean> {
     const key = this.key('change_password_otp', sessionId);
     return this.redis.set(key, JSON.stringify(payload), LOGIN_OTP_TTL);
   }
 
-  async getChangePasswordOtp(sessionId: string): Promise<LoginOtpPayload | null> {
+  async getChangePasswordOtp(sessionId: number): Promise<LoginOtpPayload | null> {
     const key = this.key('change_password_otp', sessionId);
     const raw = await this.redis.get(key);
     if (raw) {
@@ -194,17 +194,17 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteChangePasswordOtp(sessionId: string): Promise<void> {
+  async deleteChangePasswordOtp(sessionId: number): Promise<void> {
     await this.redis.del(this.key('change_password_otp', sessionId));
   }
 
-  async setChangePassword2FaPending(sessionId: string, userId: string): Promise<boolean> {
+  async setChangePassword2FaPending(sessionId: number, userId: number): Promise<boolean> {
     const key = this.key('change_password_2fa_pending', sessionId);
     const payload: Login2FaPayload = { userId };
     return this.redis.set(key, JSON.stringify(payload), LOGIN_2FA_TTL);
   }
 
-  async getChangePassword2FaPending(sessionId: string): Promise<Login2FaPayload | null> {
+  async getChangePassword2FaPending(sessionId: number): Promise<Login2FaPayload | null> {
     const key = this.key('change_password_2fa_pending', sessionId);
     const raw = await this.redis.get(key);
     if (raw) {
@@ -217,15 +217,15 @@ export class AuthTokenStoreService {
     return null;
   }
 
-  async deleteChangePassword2FaPending(sessionId: string): Promise<void> {
+  async deleteChangePassword2FaPending(sessionId: number): Promise<void> {
     await this.redis.del(this.key('change_password_2fa_pending', sessionId));
   }
 
   // ---------- DB fallback (for use by callers when Redis returns null) ----------
   /** Check DB for email verification token (fallback when Redis misses). */
   async getEmailVerificationFromDb(tokenHash: string): Promise<{
-    id: string;
-    userId: string;
+    id: number;
+    userId: number;
   } | null> {
     const row = await this.prisma.authToken.findFirst({
       where: {
@@ -240,8 +240,8 @@ export class AuthTokenStoreService {
   }
 
   /** Check DB for login OTP by session id (fallback). */
-  async getLoginOtpFromDb(sessionId: string): Promise<{
-    userId: string;
+  async getLoginOtpFromDb(sessionId: number): Promise<{
+    userId: number;
     tokenHash: string;
     expiresAt: Date;
   } | null> {
@@ -267,7 +267,7 @@ export class AuthTokenStoreService {
    * Returns why an OTP session is invalid (for clearer error messages).
    * Use after getLoginOtp + getLoginOtpFromDb both return null.
    */
-  async getLoginOtpInvalidReason(sessionId: string): Promise<
+  async getLoginOtpInvalidReason(sessionId: number): Promise<
     | 'not_found'
     | 'wrong_type_use_verify_2fa'
     | 'expired'
@@ -285,8 +285,8 @@ export class AuthTokenStoreService {
   }
 
   /** Check DB for login 2FA pending by session id (fallback). */
-  async getLogin2FaFromDb(sessionId: string): Promise<{
-    userId: string;
+  async getLogin2FaFromDb(sessionId: number): Promise<{
+    userId: number;
     expiresAt: Date;
   } | null> {
     const row = await this.prisma.authToken.findUnique({
@@ -304,7 +304,7 @@ export class AuthTokenStoreService {
   }
 
   /** DB fallback: forgot_password_otp by session id. */
-  async getForgotPasswordOtpFromDb(sessionId: string): Promise<LoginOtpPayload | null> {
+  async getForgotPasswordOtpFromDb(sessionId: number): Promise<LoginOtpPayload | null> {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });
@@ -320,7 +320,7 @@ export class AuthTokenStoreService {
   }
 
   /** DB fallback: forgot_password_2fa_pending by session id. */
-  async getForgotPassword2FaFromDb(sessionId: string): Promise<Login2FaPayload | null> {
+  async getForgotPassword2FaFromDb(sessionId: number): Promise<Login2FaPayload | null> {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });
@@ -336,7 +336,7 @@ export class AuthTokenStoreService {
   }
 
   /** DB fallback: change_password_otp by session id. */
-  async getChangePasswordOtpFromDb(sessionId: string): Promise<LoginOtpPayload | null> {
+  async getChangePasswordOtpFromDb(sessionId: number): Promise<LoginOtpPayload | null> {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });
@@ -352,7 +352,7 @@ export class AuthTokenStoreService {
   }
 
   /** DB fallback: change_password_2fa_pending by session id. */
-  async getChangePassword2FaFromDb(sessionId: string): Promise<Login2FaPayload | null> {
+  async getChangePassword2FaFromDb(sessionId: number): Promise<Login2FaPayload | null> {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });

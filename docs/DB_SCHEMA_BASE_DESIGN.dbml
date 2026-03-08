@@ -8,7 +8,7 @@
 // ==============================
 
 Table users {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id int [pk, increment]
   username varchar(50) [unique, not null]
   email varchar(255) [unique, not null]
   password_hash varchar
@@ -26,7 +26,7 @@ Table users {
 }
 
 Table user_security {
-  user_id uuid [pk]
+  user_id int [pk]
   two_factor_enabled boolean [not null, default: false]
   two_factor_secret varchar
   two_factor_method varchar
@@ -39,8 +39,8 @@ Table user_security {
 }
 
 Table auth_tokens {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
+  id int [pk, increment]
+  user_id int [not null]
   type varchar(30) [not null]
   token_hash varchar [not null]
   expires_at timestamp [not null]
@@ -55,8 +55,8 @@ Table auth_tokens {
 }
 
 Table user_devices {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
+  id int [pk, increment]
+  user_id int [not null]
   fingerprint varchar [not null]
   ip_address varchar(45)
   user_agent text
@@ -80,22 +80,22 @@ Table user_devices {
 // ==============================
 
 Table roles {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id int [pk, increment]
   name varchar(50) [unique, not null]
   description text
   created_at timestamp [not null, default: `now()`]
 }
 
 Table permissions {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id int [pk, increment]
   name varchar(100) [unique, not null]
   description text
   group_name varchar(50)
 }
 
 Table role_permissions {
-  role_id uuid [not null]
-  permission_id uuid [not null]
+  role_id int [not null]
+  permission_id int [not null]
 
   indexes {
     (role_id, permission_id) [pk]
@@ -103,9 +103,9 @@ Table role_permissions {
 }
 
 Table user_roles {
-  user_id uuid [not null]
-  role_id uuid [not null]
-  assigned_by uuid
+  user_id int [not null]
+  role_id int [not null]
+  assigned_by int
   assigned_at timestamp [not null, default: `now()`]
   expires_at timestamp
 
@@ -120,8 +120,8 @@ Table user_roles {
 // ==============================
 
 Table user_kyc {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
+  id int [pk, increment]
+  user_id int [not null]
   provider varchar(50) [not null]
   status varchar(20) [not null]
   level varchar(20) [not null]
@@ -135,9 +135,9 @@ Table user_kyc {
 }
 
 Table user_kyc_events {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_kyc_id uuid [not null]
-  actor_id uuid
+  id int [pk, increment]
+  user_kyc_id int [not null]
+  actor_id int
   event_type varchar(30) [not null]
   reason text
   raw_payload jsonb
@@ -150,8 +150,8 @@ Table user_kyc_events {
 // ==============================
 
 Table listings {
-  id uuid [pk, default: `gen_random_uuid()`]
-  seller_id uuid [not null]
+  id int [pk, increment]
+  seller_id int [not null]
   title varchar(255) [not null]
   description text
   platform varchar(30) [not null]
@@ -176,8 +176,8 @@ Table listings {
 }
 
 Table listing_media {
-  id uuid [pk, default: `gen_random_uuid()`]
-  listing_id uuid [not null]
+  id int [pk, increment]
+  listing_id int [not null]
   file_url varchar [not null]
   file_type varchar(10)
   file_size int
@@ -186,10 +186,10 @@ Table listing_media {
 }
 
 Table listing_comments {
-  id uuid [pk, default: `gen_random_uuid()`]
-  listing_id uuid [not null]
-  user_id uuid [not null]
-  parent_id uuid
+  id int [pk, increment]
+  listing_id int [not null]
+  user_id int [not null]
+  parent_id int
   message text [not null]
   is_hidden boolean [default: false]
   created_at timestamp [default: `now()`]
@@ -198,8 +198,8 @@ Table listing_comments {
 }
 
 Table listing_favorites {
-  user_id uuid [not null]
-  listing_id uuid [not null]
+  user_id int [not null]
+  listing_id int [not null]
   created_at timestamp [default: `now()`]
 
   indexes {
@@ -213,12 +213,12 @@ Table listing_favorites {
 // ==============================
 
 Table deals {
-  id uuid [pk, default: `gen_random_uuid()`]
-  listing_id uuid [not null]
-  buyer_id uuid [not null]
-  seller_id uuid [not null]
-  escrow_id uuid
-  chat_room_id uuid [not null]
+  id int [pk, increment]
+  listing_id int [not null]
+  buyer_id int [not null]
+  seller_id int [not null]
+  escrow_id int
+  chat_room_id int [not null]
   type varchar(10) [not null]
   status varchar(30) [not null]
   amount decimal(15,2) [not null]
@@ -239,9 +239,9 @@ Table deals {
 }
 
 Table deal_events {
-  id uuid [pk, default: `gen_random_uuid()`]
-  deal_id uuid [not null]
-  actor_id uuid
+  id int [pk, increment]
+  deal_id int [not null]
+  actor_id int
   event_type varchar(50) [not null]
   from_status varchar(30)
   to_status varchar(30)
@@ -250,10 +250,10 @@ Table deal_events {
 }
 
 Table deal_disputes {
-  id uuid [pk, default: `gen_random_uuid()`]
-  deal_id uuid [not null]
-  raised_by uuid [not null]
-  assigned_to uuid
+  id int [pk, increment]
+  deal_id int [not null]
+  raised_by int [not null]
+  assigned_to int
   reason text [not null]
   status varchar(20) [not null]
   resolution text
@@ -268,10 +268,10 @@ Table deal_disputes {
 // ==============================
 
 Table payments {
-  id uuid [pk, default: `gen_random_uuid()`]
-  deal_id uuid [not null]
-  payer_id uuid [not null]
-  payee_id uuid
+  id int [pk, increment]
+  deal_id int [not null]
+  payer_id int [not null]
+  payee_id int
   amount decimal(15,8) [not null]
   fee_amount decimal(15,8) [default: 0]
   net_amount decimal(15,8) [not null]
@@ -295,7 +295,7 @@ Table payments {
 // ==============================
 
 Table chat_rooms {
-  id uuid [pk, default: `gen_random_uuid()`]
+  id int [pk, increment]
   last_message_at timestamp
   last_message_preview varchar(200)
   created_at timestamp [default: `now()`]
@@ -303,12 +303,12 @@ Table chat_rooms {
 }
 
 Table chat_room_participants {
-  id uuid [pk, default: `gen_random_uuid()`]
-  chat_room_id uuid [not null]
-  user_id uuid [not null]
+  id int [pk, increment]
+  chat_room_id int [not null]
+  user_id int [not null]
   role varchar(20)
-  last_delivered_message_id uuid
-  last_read_message_id uuid
+  last_delivered_message_id int
+  last_read_message_id int
   is_muted boolean [default: false]
   muted_until timestamp
   joined_at timestamp [default: `now()`]
@@ -316,23 +316,23 @@ Table chat_room_participants {
 }
 
 Table chat_messages {
-  id uuid [pk, default: `gen_random_uuid()`]
-  chat_room_id uuid [not null]
-  sender_id uuid [not null]
+  id int [pk, increment]
+  chat_room_id int [not null]
+  sender_id int [not null]
   type varchar(30)
   message text
-  reply_to_id uuid
+  reply_to_id int
   is_flagged boolean [default: false]
-  flagged_by uuid
+  flagged_by int
   deleted_at timestamp
-  deleted_by uuid
+  deleted_by int
   edited_at timestamp
   created_at timestamp [default: `now()`]
 }
 
 Table chat_attachments {
-  id uuid [pk, default: `gen_random_uuid()`]
-  message_id uuid [not null]
+  id int [pk, increment]
+  message_id int [not null]
   file_url varchar [not null]
   file_name varchar
   file_type varchar(20)
@@ -342,9 +342,9 @@ Table chat_attachments {
 }
 
 Table chat_message_reactions {
-  id uuid [pk, default: `gen_random_uuid()`]
-  message_id uuid [not null]
-  user_id uuid [not null]
+  id int [pk, increment]
+  message_id int [not null]
+  user_id int [not null]
   emoji varchar(10)
   created_at timestamp [default: `now()`]
 }
@@ -355,7 +355,7 @@ Table chat_message_reactions {
 // ==============================
 
 Table user_presence {
-  user_id uuid [pk]
+  user_id int [pk]
   status varchar(10) [not null]
   last_seen timestamp [not null]
   socket_id varchar
@@ -368,9 +368,9 @@ Table user_presence {
 // ==============================
 
 Table notification_tokens {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  device_id uuid
+  id int [pk, increment]
+  user_id int [not null]
+  device_id int
   token varchar [not null]
   platform varchar(10) [not null]
   is_active boolean [not null, default: true]
@@ -384,9 +384,9 @@ Table notification_tokens {
 }
 
 Table notifications {
-  id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
-  chat_room_id uuid
+  id int [pk, increment]
+  user_id int [not null]
+  chat_room_id int
   type varchar(50) [not null]
   title varchar(255)
   body text

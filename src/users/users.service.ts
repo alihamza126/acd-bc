@@ -254,7 +254,7 @@ export class UsersService {
   }
 
   async verifyOtp(
-    loginSessionId: string,
+    loginSessionId: number,
     otp: string,
     ipAddress?: string,
     userAgent?: string,
@@ -338,7 +338,7 @@ export class UsersService {
   }
 
   async verify2fa(
-    loginSessionId: string,
+    loginSessionId: number,
     twoFactorCode: string,
     ipAddress?: string,
     userAgent?: string,
@@ -390,7 +390,7 @@ export class UsersService {
   }
 
   private async completeLogin(
-    userId: string,
+    userId: number,
     ipAddress?: string,
     userAgent?: string,
   ) {
@@ -502,7 +502,7 @@ export class UsersService {
     try {
       const tokenHash = generateTokenHash(token);
 
-      let userId: string | null =
+      let userId: number | null =
         (await this.authTokenStore.getEmailVerificationToken(tokenHash))?.userId ??
         null;
       if (!userId) {
@@ -551,7 +551,7 @@ export class UsersService {
     }
   }
 
-  async updateAvatar(userId: string, file: any) {
+  async updateAvatar(userId: number, file: any) {
     try {
       if (!file) {
         throw new BadRequestException('No file provided');
@@ -594,7 +594,7 @@ export class UsersService {
     }
   }
 
-  async updateUsername(userId: string, updateUsernameDto: UpdateUsernameDto) {
+  async updateUsername(userId: number, updateUsernameDto: UpdateUsernameDto) {
     try {
       const user = await this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -656,7 +656,7 @@ export class UsersService {
     }
   }
 
-  async get2FASecret(userId: string) {
+  async get2FASecret(userId: number) {
     try {
       const user = await this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -699,7 +699,7 @@ export class UsersService {
     }
   }
 
-  async enable2FA(userId: string, twoFactorCode: string) {
+  async enable2FA(userId: number, twoFactorCode: string) {
     try {
       const user = await this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -789,7 +789,7 @@ export class UsersService {
     };
   }
 
-  async verifyForgotPasswordOtp(sessionId: string, otp: string) {
+  async verifyForgotPasswordOtp(sessionId: number, otp: string) {
     let payload = await this.authTokenStore.getForgotPasswordOtp(sessionId);
     if (!payload) {
       const fromDb = await this.authTokenStore.getForgotPasswordOtpFromDb(sessionId);
@@ -833,7 +833,7 @@ export class UsersService {
     return { sessionId, message: 'Code verified. You can now reset your password.' };
   }
 
-  async verifyForgotPassword2fa(sessionId: string, twoFactorCode: string) {
+  async verifyForgotPassword2fa(sessionId: number, twoFactorCode: string) {
     let payload = await this.authTokenStore.getForgotPassword2FaPending(sessionId);
     if (!payload) {
       const fromDb = await this.authTokenStore.getForgotPassword2FaFromDb(sessionId);
@@ -865,7 +865,7 @@ export class UsersService {
     return { sessionId, message: '2FA verified. You can now reset your password.' };
   }
 
-  async resetPassword(sessionId: string, newPassword: string) {
+  async resetPassword(sessionId: number, newPassword: string) {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });
@@ -893,7 +893,7 @@ export class UsersService {
   }
 
   // ---------- Change password (authenticated) ----------
-  async requestChangePassword(userId: string, currentPassword: string) {
+  async requestChangePassword(userId: number, currentPassword: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       include: { security: true },
@@ -931,7 +931,7 @@ export class UsersService {
     };
   }
 
-  async verifyChangePasswordOtp(sessionId: string, otp: string) {
+  async verifyChangePasswordOtp(sessionId: number, otp: string) {
     let payload = await this.authTokenStore.getChangePasswordOtp(sessionId);
     if (!payload) {
       const fromDb = await this.authTokenStore.getChangePasswordOtpFromDb(sessionId);
@@ -975,7 +975,7 @@ export class UsersService {
     return { sessionId, message: 'Code verified. You can now set your new password.' };
   }
 
-  async verifyChangePassword2fa(sessionId: string, twoFactorCode: string) {
+  async verifyChangePassword2fa(sessionId: number, twoFactorCode: string) {
     let payload = await this.authTokenStore.getChangePassword2FaPending(sessionId);
     if (!payload) {
       const fromDb = await this.authTokenStore.getChangePassword2FaFromDb(sessionId);
@@ -1007,7 +1007,7 @@ export class UsersService {
     return { sessionId, message: '2FA verified. You can now set your new password.' };
   }
 
-  async confirmChangePassword(sessionId: string, newPassword: string) {
+  async confirmChangePassword(sessionId: number, newPassword: string) {
     const row = await this.prisma.authToken.findUnique({
       where: { id: sessionId },
     });

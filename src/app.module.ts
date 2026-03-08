@@ -7,6 +7,7 @@ import { QueueModule } from './common/queues/queue.module';
 import { ServicesModule } from './common/services/services.module';
 import { GuardsModule } from './common/guards/guards.module';
 import { UsersModule } from './users/users.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UsersModule } from './users/users.module';
     QueueModule,
     GuardsModule,
     UsersModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
