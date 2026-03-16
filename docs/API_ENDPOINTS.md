@@ -491,6 +491,226 @@ curl -X DELETE "http://localhost:3000/api/listings/1" \
 
 ---
 
+## Listing Subscriptions (Saved Searches)
+
+These endpoints let a user subscribe to notifications for new listings that match certain criteria (price, platform, category, audience country, etc.). Daily digests are sent via email by a background job.
+
+Base path: `/api/listing-subscriptions`  
+Auth: **JWT required** for all endpoints in this section.
+
+### 1. Create listing subscription (JWT required)
+
+**POST** `/api/listing-subscriptions`
+
+Creates a new saved search / subscription for the authenticated user.
+
+**Headers:**
+- `Authorization: Bearer <JWT>`
+
+**Request Body:**
+
+All fields are optional; unspecified filters are treated as "no filter" for that field.
+
+| Field           | Type   | Required | Description                                               |
+|-----------------|--------|----------|-----------------------------------------------------------|
+| name            | string | no       | Friendly name for the subscription (max 100 chars)       |
+| frequency       | string | no       | `DAILY` \| `WEEKLY` (default: `DAILY`)                    |
+| channel         | string | no       | `EMAIL` \| `PUSH` (currently only EMAIL is used)         |
+| minPrice        | number | no       | Minimum listing price (>= 0)                             |
+| maxPrice        | number | no       | Maximum listing price (>= 0)                             |
+| monetization    | string | no       | Monetization type (e.g. `subscription`, `one_time`, etc) |
+| platform        | string | no       | Platform filter (e.g. `youtube`, `instagram`)            |
+| category        | string | no       | Category filter (e.g. `gaming`, `education`)             |
+| audienceCountry | string | no       | Audience country code/name (max 50 chars)                |
+
+**Example Request:**
+
+```bash
+curl -X POST "http://localhost:3000/api/listing-subscriptions" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "YouTube gaming under $5k",
+    "frequency": "DAILY",
+    "channel": "EMAIL",
+    "minPrice": 0,
+    "maxPrice": 5000,
+    "platform": "youtube",
+    "category": "gaming",
+    "audienceCountry": "US"
+  }'
+```
+
+**Success (201 Created):**
+
+```json
+{
+  "id": 1,
+  "userId": 123,
+  "name": "YouTube gaming under $5k",
+  "status": "ACTIVE",
+  "frequency": "DAILY",
+  "channel": "EMAIL",
+  "minPrice": 0,
+  "maxPrice": 5000,
+  "monetization": null,
+  "platform": "youtube",
+  "category": "gaming",
+  "audienceCountry": "US",
+  "lastRunAt": null,
+  "lastEmailSentAt": null,
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "cancelledAt": null
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` – validation error (e.g. negative price, invalid enum)
+- `401 Unauthorized` – missing/invalid JWT
+
+---
+
+### 2. List my listing subscriptions (JWT required)
+
+**GET** `/api/listing-subscriptions/me`
+
+Returns all listing subscriptions for the authenticated user, ordered by `createdAt` (newest first).
+
+**Headers:**
+- `Authorization: Bearer <JWT>`
+
+**Example Request:**
+
+```bash
+curl -X GET "http://localhost:3000/api/listing-subscriptions/me" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+**Success (200 OK):**
+
+```json
+[
+  {
+    "id": 1,
+    "userId": 123,
+    "name": "YouTube gaming under $5k",
+    "status": "ACTIVE",
+    "frequency": "DAILY",
+    "channel": "EMAIL",
+    "minPrice": 0,
+    "maxPrice": 5000,
+    "monetization": null,
+    "platform": "youtube",
+    "category": "gaming",
+    "audienceCountry": "US",
+    "lastRunAt": "2025-01-02T01:00:00.000Z",
+    "lastEmailSentAt": "2025-01-02T01:00:00.000Z",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-02T01:00:00.000Z",
+    "cancelledAt": null
+  }
+]
+```
+
+**Error Responses:**
+- `401 Unauthorized` – missing/invalid JWT
+
+---
+
+### 3. Update listing subscription (JWT required, owner only)
+
+**PATCH** `/api/listing-subscriptions/:id`
+
+Updates a subscription’s filters and/or status. Any subset of the create fields is allowed, plus `status`.
+
+**Headers:**
+- `Authorization: Bearer <JWT>`
+
+**Path Params:**
+- `id` – subscription ID (integer)
+
+**Request Body (partial):**
+
+Same fields as create, plus:
+
+| Field  | Type   | Required | Description                                      |
+|--------|--------|----------|--------------------------------------------------|
+| status | string | no       | `ACTIVE` \| `PAUSED` \| `CANCELLED`              |
+
+**Example Request:**
+
+```bash
+curl -X PATCH "http://localhost:3000/api/listing-subscriptions/1" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "YouTube gaming under $10k",
+    "maxPrice": 10000,
+    "status": "ACTIVE"
+  }'
+```
+
+**Success (200 OK):**
+
+Returns the updated subscription object.
+
+**Error Responses:**
+- `400 Bad Request` – invalid body
+- `401 Unauthorized` – missing/invalid JWT
+- `403 Forbidden` – subscription does not belong to current user
+- `404 Not Found` – subscription with given ID does not exist
+
+---
+
+### 4. Pause / resume / cancel subscription (JWT required, owner only)
+
+These convenience endpoints change only the `status` (and `cancelledAt` for cancel).
+
+#### Pause
+
+**PATCH** `/api/listing-subscriptions/:id/pause`
+
+Sets `status` to `PAUSED`.
+
+```bash
+curl -X PATCH "http://localhost:3000/api/listing-subscriptions/1/pause" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+#### Resume
+
+**PATCH** `/api/listing-subscriptions/:id/resume`
+
+Sets `status` to `ACTIVE`.
+
+```bash
+curl -X PATCH "http://localhost:3000/api/listing-subscriptions/1/resume" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+#### Cancel
+
+**PATCH** `/api/listing-subscriptions/:id/cancel`
+
+Sets `status` to `CANCELLED` and records `cancelledAt`.
+
+```bash
+curl -X PATCH "http://localhost:3000/api/listing-subscriptions/1/cancel" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+**Success (200 OK):**
+
+In all three cases, returns the updated subscription.
+
+**Error Responses (all three):**
+- `401 Unauthorized` – missing/invalid JWT
+- `403 Forbidden` – subscription does not belong to current user
+- `404 Not Found` – subscription not found
+
+---
+
 ### Quick test order (listings)
 
 1. **GET /api/listings** – list active listings.  

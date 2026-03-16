@@ -44,6 +44,12 @@ http://localhost:3000/api
 | `GET` | `/api/listings/my` | List current user's listings (optional: status, page, limit) | JWT |
 | `PATCH` | `/api/listings/:id` | Update listing (owner only) | JWT |
 | `DELETE` | `/api/listings/:id` | Soft-delete listing (owner only) | JWT |
+| `POST` | `/api/listing-subscriptions` | Create a saved search / listing subscription | JWT |
+| `GET` | `/api/listing-subscriptions/me` | List current user's listing subscriptions | JWT |
+| `PATCH` | `/api/listing-subscriptions/:id` | Update listing subscription filters or status | JWT |
+| `PATCH` | `/api/listing-subscriptions/:id/pause` | Pause a listing subscription | JWT |
+| `PATCH` | `/api/listing-subscriptions/:id/resume` | Resume a paused listing subscription | JWT |
+| `PATCH` | `/api/listing-subscriptions/:id/cancel` | Cancel a listing subscription | JWT |
 
 **Listings – test all APIs with payloads:** See **`docs/API_ENDPOINTS.md`** → **"Testing all Listing APIs (payloads & cURL)"** for request/response examples, query params, body payloads, and cURL for every listing endpoint.
 

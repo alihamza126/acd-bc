@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './common/database/database.module';
@@ -9,6 +10,7 @@ import { GuardsModule } from './common/guards/guards.module';
 import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { ListingsModule } from './listings/listings.module';
+import { ListingSubscriptionsModule } from './listing-subscriptions/listing-subscriptions.module';
 
 @Module({
   imports: [
@@ -16,6 +18,7 @@ import { ListingsModule } from './listings/listings.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     ServicesModule,
     QueueModule,
@@ -23,6 +26,7 @@ import { ListingsModule } from './listings/listings.module';
     UsersModule,
     AdminModule,
     ListingsModule,
+    ListingSubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

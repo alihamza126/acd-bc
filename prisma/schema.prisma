@@ -9,6 +9,22 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ListingSubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum ListingSubscriptionFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum ListingSubscriptionChannel {
+  EMAIL
+  PUSH
+}
+
 // ==============================
 // USERS & AUTH
 // ==============================
@@ -51,6 +67,8 @@ model User {
   dealDisputesAssigned DealDispute[] @relation("AssignedDisputes")
   listingComments ListingComment[]
   listingFavorites ListingFavorite[]
+  listingSubscriptions ListingSubscription[]
+  listingSubscriptionDeliveryLogs ListingSubscriptionDeliveryLog[]
   kycEvents     UserKycEvent[]
   userBadges   UserBadge[]
   rating       Rating?
@@ -274,6 +292,7 @@ model Listing {
   comments    ListingComment[]
   favorites   ListingFavorite[]
   deals       Deal[]
+  subscriptionDeliveryLogs ListingSubscriptionDeliveryLog[]
 
   audienceCountry       String?   @db.VarChar(50)
 
@@ -281,6 +300,50 @@ model Listing {
   @@index([status, createdAt])
   @@index([platform, category, status])
   @@map("listings")
+}
+
+model ListingSubscription {
+  id              Int                          @id @default(autoincrement())
+  userId          Int                          @map("user_id")
+  name            String?                      @db.VarChar(100)
+  status          ListingSubscriptionStatus    @default(ACTIVE)
+  frequency       ListingSubscriptionFrequency @default(DAILY)
+  channel         ListingSubscriptionChannel   @default(EMAIL)
+  minPrice        Decimal?                     @map("min_price") @db.Decimal(15, 2)
+  maxPrice        Decimal?                     @map("max_price") @db.Decimal(15, 2)
+  monetization    String?                      @db.VarChar(30)
+  platform        String?                      @db.VarChar(30)
+  category        String?                      @db.VarChar(50)
+  audienceCountry String?                      @map("audience_country") @db.VarChar(50)
+  filters         Json?                        @db.JsonB
+  lastRunAt       DateTime?                    @map("last_run_at") @db.Timestamp(6)
+  lastEmailSentAt DateTime?                    @map("last_email_sent_at") @db.Timestamp(6)
+  createdAt       DateTime                     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime                     @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  cancelledAt     DateTime?                    @map("cancelled_at") @db.Timestamp(6)
+
+  user    User                              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs    ListingSubscriptionDeliveryLog[]
+
+  @@index([userId, status])
+  @@index([status, frequency])
+  @@map("listing_subscriptions")
+}
+
+model ListingSubscriptionDeliveryLog {
+  id             Int                 @id @default(autoincrement())
+  subscriptionId Int                 @map("subscription_id")
+  userId         Int                 @map("user_id")
+  listingId      Int                 @map("listing_id")
+  sentAt         DateTime            @map("sent_at") @db.Timestamp(6)
+
+  subscription   ListingSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing        Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, listingId])
+  @@index([userId, sentAt])
+  @@map("listing_subscription_delivery_logs")
 }
 
 model ListingMedia {
