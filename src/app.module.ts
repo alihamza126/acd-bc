@@ -8,6 +8,7 @@ import { ServicesModule } from './common/services/services.module';
 import { GuardsModule } from './common/guards/guards.module';
 import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
+import { ListingsModule } from './listings/listings.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminModule } from './admin/admin.module';
     GuardsModule,
     UsersModule,
     AdminModule,
+    ListingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

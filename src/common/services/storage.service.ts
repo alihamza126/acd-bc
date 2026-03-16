@@ -2,12 +2,20 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { v2 as cloudinary } from 'cloudinary';
+import axios from 'axios';
 import { getStorageConfig } from '../config/storage.config';
 
 export interface UploadResult {
   url: string;
   publicId?: string;
   key?: string;
+}
+
+export interface UploadFromUrlResult extends UploadResult {
+  width?: number;
+  height?: number;
+  format?: string;
+  bytes?: number;
 }
 
 @Injectable()
@@ -62,7 +70,7 @@ export class StorageService {
       throw new BadRequestException(`File type ${file.mimetype} not allowed`);
     }
 
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 20 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
@@ -130,6 +138,99 @@ export class StorageService {
 
       uploadStream.end(file.buffer);
     });
+  }
+
+  /**
+   * Upload an image from a public URL. Works with both Cloudinary and AWS S3.
+   * @param imageUrl Public URL of the image to upload
+   * @param folder Folder/prefix for the stored file (e.g. 'listings', 'next-uploads')
+   */
+  async uploadImageFromUrl(
+    imageUrl: string,
+    folder: string = 'listings',
+  ): Promise<UploadFromUrlResult> {
+    if (!imageUrl?.startsWith('http')) {
+      throw new BadRequestException('Invalid image URL');
+    }
+
+    try {
+      if (this.config.provider === 'aws') {
+        return await this.uploadImageFromUrlToS3(imageUrl, folder);
+      }
+      return await this.uploadImageFromUrlToCloudinary(imageUrl, folder);
+    } catch (error) {
+      this.logger.error('Upload image from URL failed', error);
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Failed to upload image from URL',
+      );
+    }
+  }
+
+  private async uploadImageFromUrlToCloudinary(
+    imageUrl: string,
+    folder: string,
+  ): Promise<UploadFromUrlResult> {
+    if (!this.config.cloudinary?.cloudName) {
+      throw new BadRequestException('Cloudinary not configured');
+    }
+
+    const result = await cloudinary.uploader.upload(imageUrl, {
+      folder,
+      resource_type: 'image',
+      transformation: [
+        { width: 800, height: 600, crop: 'fill' },
+        { quality: 'auto' },
+      ],
+    });
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+      bytes: result.bytes,
+    };
+  }
+
+  private async uploadImageFromUrlToS3(
+    imageUrl: string,
+    folder: string,
+  ): Promise<UploadFromUrlResult> {
+    if (!this.s3Client || !this.config.aws?.bucket) {
+      throw new BadRequestException('AWS S3 not configured');
+    }
+
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      maxContentLength: 10 * 1024 * 1024, // 10MB
+      validateStatus: (status) => status === 200,
+    });
+
+    const buffer = Buffer.from(response.data);
+    const contentType =
+      response.headers['content-type']?.split(';')[0]?.trim() || 'image/jpeg';
+    const ext = contentType.replace('image/', '') || 'jpg';
+    const key = `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 12)}.${ext}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.config.aws.bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+      ACL: 'public-read',
+    });
+
+    await this.s3Client.send(command);
+
+    const url = `https://${this.config.aws.bucket}.s3.${this.config.aws.region}.amazonaws.com/${key}`;
+
+    return {
+      url,
+      key,
+      bytes: buffer.length,
+    };
   }
 
   async deleteFile(url: string): Promise<boolean> {

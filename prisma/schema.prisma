@@ -52,6 +52,8 @@ model User {
   listingComments ListingComment[]
   listingFavorites ListingFavorite[]
   kycEvents     UserKycEvent[]
+  userBadges   UserBadge[]
+  rating       Rating?
 
   @@index([status])
   @@index([deletedAt])
@@ -112,6 +114,36 @@ model UserDevice {
   @@index([userId])
   @@index([fingerprint])
   @@map("user_devices")
+}
+
+model UserBadge {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  badge     String    @db.VarChar(20)
+  expiry    DateTime? @db.Timestamp(6)
+  active    Boolean   @default(true)
+  activeAt  DateTime? @map("active_at") @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, active, badge])
+  @@map("user_badges")
+}
+
+model Rating {
+  id       Int   @id @default(autoincrement())
+  userId   Int   @unique @map("user_id")
+  positive Int   @default(0)
+  neutral  Int   @default(0)
+  negative Int   @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("ratings")
 }
 
 // ==============================
@@ -219,7 +251,7 @@ model Listing {
   description           String?   @db.Text
   platform              String    @db.VarChar(30)
   category              String?   @db.VarChar(50)
-  link                  String?   @db.VarChar
+  link                  String?   @unique @db.VarChar
   price                 Decimal   @db.Decimal(15, 2)
   status                String    @default("draft") @db.VarChar(20)
   subscribers           BigInt?
@@ -242,6 +274,8 @@ model Listing {
   comments    ListingComment[]
   favorites   ListingFavorite[]
   deals       Deal[]
+
+  audienceCountry       String?   @db.VarChar(50)
 
   @@index([sellerId, status])
   @@index([status, createdAt])

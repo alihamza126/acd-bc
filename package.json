@@ -47,6 +47,8 @@
     "@types/multer": "^2.0.0",
     "@types/nodemailer": "^7.0.10",
     "@types/passport-jwt": "^4.0.1",
+    "apify-client": "^2.22.2",
+    "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.69.3",
     "class-transformer": "^0.5.1",

@@ -26,6 +26,10 @@ http://localhost:3000/api
 | `POST` | `/api/auth/change-password/verify-2fa` | Verify 2FA for change password (if enabled) | No |
 | `POST` | `/api/auth/change-password/confirm` | Set new password after change flow | No |
 | `GET` | `/api` | Health check | No |
+| `GET` | `/api/listings` | List active listings (optional: platform, category, status, page, limit) | No |
+| `GET` | `/api/listings/:id` | Get listing by ID (active public; draft/archived only for owner via auth) | No |
+| `GET` | `/api/listings/info` | Get listing info from URL (platform, title, thumbnail uploaded to storage, subscribers); query: `url` | No |
+| `POST` | `/api/listings/verify` | Verify listing link (code in channel/profile description; body: verificationCode, socialMedia, link) | No |
 
 ### 🔒 Protected Endpoints (JWT Required)
 
@@ -36,6 +40,12 @@ http://localhost:3000/api
 | `GET` | `/api/users/profile/2fa/secret` | Get 2FA secret & QR code |
 | `POST` | `/api/users/profile/2fa/enable` | Enable 2FA |
 | `POST` | `/api/users/profile/change-password/request` | Request change password (sends OTP; requires current password) |
+| `POST` | `/api/listings` | Create a listing | JWT |
+| `GET` | `/api/listings/my` | List current user's listings (optional: status, page, limit) | JWT |
+| `PATCH` | `/api/listings/:id` | Update listing (owner only) | JWT |
+| `DELETE` | `/api/listings/:id` | Soft-delete listing (owner only) | JWT |
+
+**Listings – test all APIs with payloads:** See **`docs/API_ENDPOINTS.md`** → **"Testing all Listing APIs (payloads & cURL)"** for request/response examples, query params, body payloads, and cURL for every listing endpoint.
 
 ### 🛡️ Admin panel (JWT + permission-based)
 

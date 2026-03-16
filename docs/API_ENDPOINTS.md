@@ -159,6 +159,351 @@ curl -X GET http://localhost:3000/api/protected-endpoint \
 
 ---
 
+## Listings
+
+### List listings (public)
+**GET** `/api/listings`
+
+Query parameters (optional): `platform`, `category`, `status` (draft | active | sold | archived), `page`, `limit`. Default status filter is `active` when not provided.
+
+**Response (200 OK):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "sellerId": 1,
+      "seller": { "id": 1, "username": "seller1" },
+      "title": "YouTube channel",
+      "platform": "youtube",
+      "category": "gaming",
+      "price": 5000,
+      "status": "active",
+      "viewCount": 0,
+      "favoriteCount": 0,
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "meta": { "total": 1, "page": 1, "limit": 20, "totalPages": 1 }
+}
+```
+
+### Get listing by ID (public for active; owner can see draft/archived)
+**GET** `/api/listings/:id`
+
+For non-owners, only listings with `status: "active"` are returned; otherwise 404. Pass optional JWT to be recognized as owner for draft/archived. View count is incremented for non-owner views.
+
+### Get listing info from URL (public)
+**GET** `/api/listings/info?url=...`
+
+Fetches channel/profile metadata from the given URL (YouTube, Instagram, or TikTok), uploads the thumbnail image to your configured storage (AWS S3 or Cloudinary), and returns type, title, thumbnail (id, name, url), and subscribers.
+
+**Query:** `url` (required) – full profile/channel URL (e.g. `https://www.youtube.com/channel/UCxxx` or `https://instagram.com/username`).
+
+**Response (200 OK):**
+```json
+{
+  "type": "youtube",
+  "title": "Channel Name",
+  "thumbnail": { "id": "listings/xxx", "name": "listings/xxx", "url": "https://..." },
+  "subscribers": 10000
+}
+```
+
+If thumbnail upload fails, `thumbnail` is `{ "id": null, "name": null, "url": null }`. Uses same env as verify: `YOUTUBE_API_KEY`, `APIFY_TOKEN` or `INSTAGRAM_API_KEY`. Thumbnails are stored in the `listings` folder via `StorageService.uploadImageFromUrl` (Cloudinary or S3 per `STORAGE_PROVIDER`).
+
+### Verify listing link (public)
+**POST** `/api/listings/verify`
+
+Checks that the given verification code appears in the channel/profile description on the given platform. Use before or after creating a listing to prove ownership.
+
+**Request Body:**
+```json
+{
+  "verificationCode": "ABC123",
+  "socialMedia": "youtube",
+  "link": "https://www.youtube.com/channel/UCxxxx"
+}
+```
+
+- **socialMedia:** `youtube` | `instagram` | `tiktok` | `facebook` (facebook always passes).
+- **link:** Full profile/channel URL.
+
+**Response (200 OK):** `{ "verified": true }`
+
+**Error (400):** Verification code not found in channel/profile description, invalid URL, or platform not configured.
+
+**Environment:** `YOUTUBE_API_KEY` for YouTube; `APIFY_TOKEN` or `APIFY_TOKEN` for Instagram/TikTok (Apify actors).
+
+### Create listing (JWT required)
+**POST** `/api/listings`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "title": "My YouTube channel",
+  "description": "Gaming content",
+  "platform": "youtube",
+  "category": "gaming",
+  "link": "https://youtube.com/...",
+  "price": 5000,
+  "status": "draft",
+  "monetizationAvailable": true,
+  "displayLink": false,
+  "allowComments": true
+}
+```
+
+**Response (201 Created):** Created listing object.
+
+### List my listings (JWT required)
+**GET** `/api/listings/my`
+
+Query parameters (optional): `status`, `page`, `limit`. Returns only the authenticated user's listings.
+
+### Update listing (JWT required, owner only)
+**PATCH** `/api/listings/:id`
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:** Any subset of create fields plus `isFeatured`, `featuredExpiresAt`.
+
+**Response (200 OK):** Updated listing object.
+
+### Delete listing (JWT required, owner only)
+**DELETE** `/api/listings/:id`
+
+**Headers:** `Authorization: Bearer <token>`
+
+Soft-deletes the listing. **Response (200 OK):** `{ "message": "Listing deleted successfully" }`.
+
+---
+
+## Testing all Listing APIs (payloads & cURL)
+
+Base URL: `http://localhost:3000/api` (or your server). For protected endpoints, get a JWT first via **POST /api/auth/login** → **POST /api/auth/verify-otp**, then use `Authorization: Bearer <TOKEN>`.
+
+### 1. List listings (public)
+
+**Request:** `GET /api/listings`  
+**Query (optional):** `platform`, `category`, `status`, `page`, `limit`
+
+| Param     | Example   | Description                          |
+|----------|-----------|--------------------------------------|
+| platform | youtube   | Filter by platform                   |
+| category | gaming    | Filter by category                   |
+| status   | active    | draft \| active \| sold \| archived  |
+| page     | 1         | Page number (default 1)              |
+| limit    | 20        | Items per page (default 20, max 50) |
+
+**Payload (query string):** none required; optional: `?platform=youtube&status=active&page=1&limit=10`
+
+```bash
+curl -X GET "http://localhost:3000/api/listings?platform=youtube&status=active&page=1&limit=10"
+```
+
+**Expected (200):** `{ "data": [ { "id", "sellerId", "seller", "title", "platform", "category", "price", "status", "viewCount", "favoriteCount", "createdAt", "updatedAt" } ], "meta": { "total", "page", "limit", "totalPages" } }`
+
+---
+
+### 2. Get listing by ID (public)
+
+**Request:** `GET /api/listings/:id`  
+**Payload:** none (ID in path)
+
+```bash
+curl -X GET "http://localhost:3000/api/listings/1"
+```
+
+**Expected (200):** Single listing object (with `media` when available). 404 if not found or not active (and caller is not owner).
+
+---
+
+### 3. Get listing info from URL (public)
+
+**Request:** `GET /api/listings/info`  
+**Query (required):** `url` – full profile/channel URL
+
+**Payload (query):** `?url=https://www.youtube.com/channel/UCxxxx` or `?url=https://instagram.com/username`
+
+```bash
+curl -X GET "http://localhost:3000/api/listings/info?url=https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw"
+```
+
+**Expected (200):**
+```json
+{
+  "type": "youtube",
+  "title": "Channel Name",
+  "thumbnail": { "id": "listings/xxx", "name": "listings/xxx", "url": "https://..." },
+  "subscribers": 10000
+}
+```
+
+---
+
+### 4. Verify listing link (public)
+
+**Request:** `POST /api/listings/verify`  
+**Payload (body):**
+
+| Field             | Type   | Required | Description                                      |
+|-------------------|--------|----------|--------------------------------------------------|
+| verificationCode  | string | yes      | Code that must appear in channel/profile text   |
+| socialMedia       | string | yes      | `youtube` \| `instagram` \| `tiktok` \| `facebook` |
+| link              | string | yes      | Full profile/channel URL                         |
+
+**Example body:**
+```json
+{
+  "verificationCode": "ABC123",
+  "socialMedia": "youtube",
+  "link": "https://www.youtube.com/channel/UCxxxx"
+}
+```
+
+```bash
+curl -X POST "http://localhost:3000/api/listings/verify" \
+  -H "Content-Type: application/json" \
+  -d '{"verificationCode":"ABC123","socialMedia":"youtube","link":"https://www.youtube.com/channel/UCxxxx"}'
+```
+
+**Expected (200):** `{ "verified": true }`  
+**Expected (400):** `{ "statusCode": 400, "message": "Verification code not found in channel description" }`
+
+---
+
+### 5. Create listing (JWT required)
+
+**Request:** `POST /api/listings`  
+**Headers:** `Authorization: Bearer <JWT>`
+
+**Payload (body):**
+
+| Field                  | Type    | Required | Description                    |
+|------------------------|---------|----------|--------------------------------|
+| title                  | string  | yes      | Max 255 chars                  |
+| platform               | string  | yes      | e.g. youtube, instagram       |
+| price                  | number  | yes      | ≥ 0                            |
+| description            | string  | no       |                                |
+| category               | string  | no       | Max 50 chars                   |
+| link                   | string  | no       | Valid URL                      |
+| status                 | string  | no       | Default draft                  |
+| subscribers            | number  | no       | ≥ 0                            |
+| monthlyViews           | number  | no       | ≥ 0                            |
+| monthlyIncome          | number  | no       | ≥ 0                            |
+| monthlyExpense         | number  | no       | ≥ 0                            |
+| monetizationAvailable  | boolean | no       | Default false                   |
+| displayLink            | boolean | no       | Default false                   |
+| allowComments          | boolean | no       | Default true                    |
+| audienceCountry        | string  | no       | Max 50 chars                   |
+
+**Example body:**
+```json
+{
+  "title": "My YouTube channel",
+  "description": "Gaming content",
+  "platform": "youtube",
+  "category": "gaming",
+  "link": "https://www.youtube.com/channel/UCxxxx",
+  "price": 5000,
+  "status": "draft",
+  "subscribers": 10000,
+  "monthlyViews": 50000,
+  "monetizationAvailable": true,
+  "displayLink": false,
+  "allowComments": true,
+  "audienceCountry": "US"
+}
+```
+
+```bash
+curl -X POST "http://localhost:3000/api/listings" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My YouTube channel","description":"Gaming content","platform":"youtube","category":"gaming","link":"https://www.youtube.com/channel/UCxxxx","price":5000,"status":"draft","monetizationAvailable":true,"displayLink":false,"allowComments":true}'
+```
+
+**Expected (201):** Created listing object (id, sellerId, seller, title, platform, category, link, price, status, viewCount, favoriteCount, createdAt, updatedAt, etc.).
+
+---
+
+### 6. List my listings (JWT required)
+
+**Request:** `GET /api/listings/my`  
+**Headers:** `Authorization: Bearer <JWT>`  
+**Query (optional):** `status`, `page`, `limit`
+
+**Payload (query):** e.g. `?status=draft&page=1&limit=20`
+
+```bash
+curl -X GET "http://localhost:3000/api/listings/my?status=draft&page=1&limit=20" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+**Expected (200):** Same shape as list listings: `{ "data": [ ... ], "meta": { "total", "page", "limit", "totalPages" } }` (only current user’s listings).
+
+---
+
+### 7. Update listing (JWT required, owner only)
+
+**Request:** `PATCH /api/listings/:id`  
+**Headers:** `Authorization: Bearer <JWT>`  
+**Payload (body):** Any subset of create-listing fields plus `isFeatured`, `featuredExpiresAt` (ISO date string).
+
+**Example body:**
+```json
+{
+  "title": "Updated channel title",
+  "status": "active",
+  "price": 5500,
+  "isFeatured": false
+}
+```
+
+```bash
+curl -X PATCH "http://localhost:3000/api/listings/1" \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Updated channel title","status":"active","price":5500}'
+```
+
+**Expected (200):** Updated listing object. 403 if not owner; 404 if listing not found.
+
+---
+
+### 8. Delete listing (JWT required, owner only)
+
+**Request:** `DELETE /api/listings/:id`  
+**Headers:** `Authorization: Bearer <JWT>`  
+**Payload:** none
+
+```bash
+curl -X DELETE "http://localhost:3000/api/listings/1" \
+  -H "Authorization: Bearer YOUR_JWT"
+```
+
+**Expected (200):** `{ "message": "Listing deleted successfully" }`  
+**Expected (403):** Not owner. **Expected (404):** Listing not found.
+
+---
+
+### Quick test order (listings)
+
+1. **GET /api/listings** – list active listings.  
+2. **GET /api/listings/info?url=...** – get info + thumbnail from URL.  
+3. **POST /api/listings/verify** – verify code in profile/channel.  
+4. **POST /api/listings** (with JWT) – create listing.  
+5. **GET /api/listings/my** (with JWT) – list own listings.  
+6. **GET /api/listings/1** – get one listing.  
+7. **PATCH /api/listings/1** (with JWT) – update own listing.  
+8. **DELETE /api/listings/1** (with JWT) – soft-delete own listing.
+
+---
+
 ## Basic Authentication
 
 If `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` are set in `.env`, you can use Basic Auth:
